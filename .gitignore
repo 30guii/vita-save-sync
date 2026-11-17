@@ -1,0 +1,20 @@
+# Personal data created by the app at runtime (IP, folders, sync state, logs)
+config.json
+sync_state.json
+history.json
+app.log
+cache/
+
+# Build output (the .exe is published as a GitHub Release instead)
+*.exe
+build/
+dist/
+*.spec
+
+# Python
+__pycache__/
+*.pyc
+
+# Local leftovers
+PSVitaSaveSync_antigo.py
+ui/_preview.html

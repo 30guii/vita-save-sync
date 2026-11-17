@@ -1,0 +1,3 @@
+-r requirements.txt
+pyftpdlib     # fake "Vita" FTP server used by tests/test_sync.py
+pyinstaller   # only needed to build the .exe (tools/build_exe.bat)
