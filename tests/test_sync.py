@@ -249,6 +249,14 @@ check("changed PC file uploaded", res["games"]["GAMEC"]["status"], "uploaded")
 check("summary counts saves", res["uploaded"], 1)
 SE.md5_file = orig_md5
 
+# ---------------------------------------------------------------- malicious FTP names are ignored
+for evil in ("..", ".", "..\\..\\Startup\\evil.exe", "../../evil", "C:evil", "a/b", "evil.", "nul\x00x"):
+    line = f"-rw-rw-rw- 1 vita vita 10 Nov 17 14:03 {evil}"
+    check(f"unsafe FTP name rejected: {evil!r}", SE.parse_list_line(line), None)
+check("normal FTP name accepted", SE.parse_list_line("drw-rw-rw- 1 vita vita 0 Nov 17 14:03 ULUS10311GHOST04").name,
+      "ULUS10311GHOST04")
+check("save_details ignores unsafe ids", SE.save_details(pc, None, ["..", "..\\x", "GAMEA"]).keys() == {"GAMEA"}, True)
+
 # ---------------------------------------------------------------- connection test
 check("connection test ok", vita_net.test_connection("127.0.0.1", port, VITA_DIR)["ok"], True)
 check("connection refused reported", vita_net.test_connection("127.0.0.1", 1, "/x")["ok"], False)

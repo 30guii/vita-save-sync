@@ -86,13 +86,27 @@ def remote_size(entry: RemoteEntry) -> int:
         return 0
 
 
+_UNSAFE_CHARS = re.compile(r'[\\/:*?"<>|\x00-\x1f]')
+MAX_FILE_BYTES = 512 * 1024 * 1024   # nenhum ficheiro de save PSP chega perto disto
+
+
+def safe_name(name: str) -> bool:
+    """Um nome vindo do FTP só é usado se for um nome simples de ficheiro/pasta.
+
+    Sem isto, um servidor FTP malicioso na rede podia responder com nomes como
+    "..\\..\\Startup\\x" e a app escreveria ficheiros fora da pasta de saves.
+    """
+    return (bool(name) and name not in (".", "..") and not _UNSAFE_CHARS.search(name)
+            and name == name.rstrip(" ."))   # o Windows ignora pontos/espaços no fim
+
+
 def parse_list_line(line: str) -> RemoteEntry | None:
     # ex: "-rw-rw-rw- 1 vita vita 123456 Nov 17 14:03 DATA.BIN"
     parts = line.split(maxsplit=8)
     if len(parts) < 9:
         return None
     name = parts[8].strip()
-    if name in (".", ".."):
+    if not safe_name(name):
         return None
     return RemoteEntry(name, parts[0].startswith("d"), " ".join(parts[4:8]))
 
@@ -234,6 +248,8 @@ def save_details(pc_dir: str, vita_cache_dir: str | None, save_ids: list[str]) -
     """Informação extra para a página de um jogo: imagem de fundo e lista de ficheiros."""
     out = {}
     for sid in save_ids:
+        if not safe_name(sid):
+            continue
         folder = os.path.join(pc_dir, sid)
         on_pc = os.path.isdir(folder)
         if not on_pc and vita_cache_dir:
@@ -403,6 +419,8 @@ class SaveSync:
 
         def take(chunk: bytes) -> None:
             buf.write(chunk)
+            if buf.tell() > MAX_FILE_BYTES:      # servidor a enviar dados sem fim
+                raise ftplib.error_perm(f"550 {rel}: file too large")
             self._count(len(chunk), rel)
 
         ftp.retrbinary(f"RETR {name}", take)
