@@ -5,578 +5,488 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PS Vita Save Sync</title>
 <style>
+  /* Tokens semânticos. Claro por omissão; escuro com o Windows em modo escuro ("Sistema")
+     ou escolhido à mão (modo noturno). Contrastes medidos sobre o fundo onde cada cor aparece. */
   :root {
-    --bg: #070b14;
-    --bg-2: #0b1222;
-    --surface: #111a2e;
-    --surface-2: #17223a;
-    --line: #22304d;
-    --text: #e8eefc;
-    --muted: #8492b0;
-    --faint: #56627e;
-    --blue: #2f7bff;
-    --blue-2: #5aa0ff;
-    --cyan: #3fd6ff;
-    --green: #3ddc97;
-    --amber: #ffb547;
-    --red: #ff5d6c;
-    --radius: 16px;
+    --window: #f2f2f4;       /* barra de ferramentas e fundo */
+    --sidebar: #e9e9ed;
+    --surface: #ffffff;      /* conteúdo, inspetor, folhas */
+    --surface-2: #f6f6f8;
+    --separator: #d7d7dc;
+    --label: #1d1d1f;        /* 16.8:1 em #fff */
+    --label-2: #5c5c63;      /* 6.6:1 em #fff */
+    --label-3: #636369;      /* 6.0:1 em #fff, 4.9:1 na barra lateral */
+    --accent: #0a62d0;       /* 5.7:1 em #fff — seleção e texto de destaque */
+    --accent-fill: #0a62d0;  /* fundo do botão principal, texto branco 5.7:1 */
+    --accent-soft: rgba(10, 98, 208, .10);
+    --ok: #1a7f37;           /* 5.1:1 */
+    --warn: #a35200;         /* 5.6:1, 4.6:1 na barra lateral */
+    --danger: #c62828;
+    --shadow: 0 1px 2px rgba(0,0,0,.06), 0 8px 24px rgba(0,0,0,.06);
+    --sheet-shadow: 0 24px 60px rgba(0,0,0,.25);
+    --scrim: rgba(0,0,0,.18);
     --font: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
-    --mono: "Cascadia Mono", Consolas, monospace;
+    --font-display: "Segoe UI Variable Display", "Segoe UI", "Microsoft YaHei UI", system-ui, sans-serif;
+    --mono: "Cascadia Mono", Consolas, ui-monospace, monospace;
+    color-scheme: light;
+  }
+  /* modo noturno: os mesmos papéis, valores para fundo escuro (a classe é posta pelo script,
+     a partir de "Sistema" + Windows escuro, ou de "Escuro" escolhido à mão) */
+  :root.dark {
+    --window: #1c1c1e; --sidebar: #232326; --surface: #2a2a2d; --surface-2: #323236; --separator: #3d3d42;
+    --label: #f5f5f7;        /* 13.1:1 em #2a2a2d */
+    --label-2: #b0b0b7;      /* 6.6:1 */
+    --label-3: #9a9aa1;      /* 5.1:1, 5.6:1 na barra lateral */
+    --accent: #4c9bff;       /* 5.1:1 */
+    --accent-fill: #1f6fd6;  /* texto branco 4.9:1 */
+    --accent-soft: rgba(76, 155, 255, .16);
+    --ok: #4cd26b; --warn: #ffab40; --danger: #ff6b6b;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
+    --sheet-shadow: 0 24px 60px rgba(0,0,0,.6);
+    --scrim: rgba(0,0,0,.45);
+    color-scheme: dark;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; }
-  body {
-    background:
-      radial-gradient(900px 500px at 85% -10%, rgba(47,123,255,.18), transparent 60%),
-      radial-gradient(700px 500px at -10% 110%, rgba(63,214,255,.10), transparent 60%),
-      var(--bg);
-    color: var(--text);
-    font: 14px/1.45 var(--font);
-    overflow: hidden;
-    user-select: none;
-    display: flex; flex-direction: column;
-  }
-  button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
+  body { background: var(--window); color: var(--label); font: 14px/1.45 var(--font); display: flex; flex-direction: column; overflow: hidden; }
+  button, select { font: inherit; color: inherit; background: none; border: 0; }
   input { font: inherit; color: inherit; }
-
-  /* ---------- marca ---------- */
-  .brand { display: flex; align-items: center; gap: 10px; padding: 4px 4px 0; }
-  .brand .name { font-weight: 650; font-size: 15px; letter-spacing: .2px; flex: 1; }
-  .brand .name span { color: var(--muted); font-weight: 400; }
-  .icon-btn { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; color: var(--muted); border: 1px solid transparent; }
-  .icon-btn:hover { background: var(--surface-2); color: var(--text); border-color: var(--line); }
-  .logo {
-    width: 22px; height: 22px; border-radius: 50%;
-    background: conic-gradient(from 200deg, var(--blue), var(--cyan), var(--blue));
-    box-shadow: 0 0 14px rgba(63,214,255,.5);
-    position: relative;
-  }
-  .logo::after { content: ""; position: absolute; inset: 6px; border-radius: 50%; background: var(--bg); }
-
-  /* ---------- layout ---------- */
-  .app { flex: 1; min-height: 0; display: grid; grid-template-columns: 320px 1fr; gap: 16px; padding: 14px 16px 16px; }
-  .side { display: flex; flex-direction: column; gap: 14px; min-height: 0; overflow-y: auto; }
-  .side::-webkit-scrollbar { width: 0; }
-  @media (max-width: 900px) {
-    .app { grid-template-columns: 270px 1fr; gap: 12px; }
-    .mode span { display: none; }
-    .search { width: 150px; }
-  }
-  .card {
-    background: linear-gradient(180deg, rgba(255,255,255,.025), transparent), var(--surface);
-    border: 1px solid var(--line); border-radius: var(--radius); padding: 16px;
-  }
-  .label { font-size: 11px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--muted); font-weight: 600; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
-
-  /* ligação */
-  .conn-row { display: grid; grid-template-columns: 1fr 86px; gap: 8px; }
-  .field { display: flex; flex-direction: column; gap: 4px; }
-  .field small { color: var(--faint); font-size: 11px; }
-  .field input {
-    background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px;
-    padding: 9px 11px; outline: none; width: 100%; font-family: var(--mono); font-size: 13px;
-    transition: border-color .15s, box-shadow .15s;
-  }
-  .field select { background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px; outline: none; width: 100%; font: inherit; font-size: 13px; color: var(--text); }
-  .field select:focus { border-color: var(--blue); }
-  .field input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(47,123,255,.2); }
-  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); }
-  .dot.ok { background: var(--green); box-shadow: 0 0 8px var(--green); }
-  .dot.busy { background: var(--amber); box-shadow: 0 0 8px var(--amber); animation: pulse 1s infinite; }
-  .dot.err { background: var(--red); box-shadow: 0 0 8px var(--red); }
-  @keyframes pulse { 50% { opacity: .35; } }
-
-  /* modos */
-  .modes { display: flex; flex-direction: column; gap: 6px; }
-  .mode {
-    display: grid; grid-template-columns: 34px 1fr; gap: 10px; align-items: center; text-align: left;
-    padding: 9px 10px; border-radius: 12px; border: 1px solid transparent; transition: background .15s, border-color .15s;
-  }
-  .mode:hover { background: var(--surface-2); }
-  .mode .ic { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--bg-2); color: var(--muted); }
-  .mode b { display: block; font-weight: 600; font-size: 13.5px; }
-  .mode span { color: var(--muted); font-size: 12px; }
-  .mode.on { background: rgba(47,123,255,.12); border-color: rgba(47,123,255,.45); }
-  .mode.on .ic { background: var(--blue); color: #fff; box-shadow: 0 0 16px rgba(47,123,255,.55); }
-
-  /* botão principal */
-  .sync { margin-top: auto; }
-  .sync-btn {
-    width: 100%; height: 54px; border-radius: 14px; font-weight: 600; font-size: 15px; letter-spacing: .3px;
-    background: linear-gradient(135deg, var(--blue), #1f5fe0 60%, #1748b8);
-    box-shadow: 0 10px 30px -10px rgba(47,123,255,.8), inset 0 1px 0 rgba(255,255,255,.2);
-    display: flex; align-items: center; justify-content: center; gap: 10px; transition: transform .1s, filter .15s;
-  }
-  .sync-btn:hover { filter: brightness(1.1); }
-  .sync-btn:active { transform: scale(.985); }
-  .sync-btn:disabled { filter: grayscale(.6) brightness(.7); cursor: default; }
-  .sync-btn svg { transition: transform .3s; }
-  .sync-btn.spin svg { animation: spin 1s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .progress { height: 4px; background: var(--bg-2); border-radius: 4px; overflow: hidden; margin-top: 12px; }
-  .progress i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--blue), var(--cyan)); transition: width .25s; }
-  .status { margin-top: 8px; font-size: 12.5px; color: var(--muted); min-height: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .status.err { color: var(--red); white-space: normal; }
-  .status.ok { color: var(--green); }
-
-  /* ---------- painel dos jogos ---------- */
-  .main { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
-  .main-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
-  .main-head h1 { font-size: 22px; margin: 0; font-weight: 650; letter-spacing: -.2px; }
-  .main-head h1 small { color: var(--muted); font-weight: 400; font-size: 14px; margin-left: 6px; }
-  .main-head .grow { flex: 1; }
-  .search {
-    display: flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--line);
-    border-radius: 999px; padding: 6px 12px; width: 220px; color: var(--muted);
-  }
-  .search input { background: none; border: 0; outline: none; flex: 1; min-width: 0; }
-  .chips { display: flex; gap: 6px; }
-  .chip { padding: 6px 12px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); color: var(--muted); font-size: 12.5px; }
-  .chip.on { color: var(--text); border-color: var(--blue); background: rgba(47,123,255,.15); }
-  .chip .n { margin-left: 4px; color: var(--amber); font-weight: 600; }
-  .ghost { color: var(--muted); padding: 6px 8px; border-radius: 8px; font-size: 12.5px; display: inline-flex; gap: 6px; align-items: center; }
-  .ghost:hover { color: var(--text); background: var(--surface-2); }
-
-  .grid-wrap { flex: 1; min-height: 0; overflow-y: auto; padding-right: 4px; margin-right: -4px; }
-  ::-webkit-scrollbar { width: 8px; height: 8px; }
-  ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: var(--line); border-radius: 8px; }
-  ::-webkit-scrollbar-thumb:hover { background: #2c3d62; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+  [hidden] { display: none !important; }
+  svg.i { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: var(--separator); border-radius: 10px; border: 2px solid transparent; background-clip: padding-box; }
   ::-webkit-scrollbar-button { display: none; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(196px, 1fr)); gap: 12px; }
-  .game {
-    background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden;
-    display: flex; flex-direction: column; transition: transform .15s, border-color .15s, box-shadow .15s;
-  }
-  .grid.intro .game { animation: rise .3s both; }
-  .game:hover { transform: translateY(-2px); border-color: #2c3d62; box-shadow: 0 12px 30px -14px rgba(0,0,0,.8); }
+
+  /* ---------------- barra de ferramentas ---------------- */
+  .toolbar { height: 52px; flex: none; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 0 12px; border-bottom: 1px solid var(--separator); background: var(--window); position: relative; z-index: 5; }
+  .tb-left, .tb-right { display: flex; align-items: center; gap: 6px; }
+  .tb-right { justify-content: flex-end; }
+  .app-title { font-weight: 600; white-space: nowrap; }
+  .tb-btn { height: 32px; min-width: 32px; padding: 0 8px; border-radius: 7px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; color: var(--label-2); }
+  .tb-btn:hover { background: var(--surface-2); color: var(--label); }
+  .tb-btn svg.i { width: 18px; height: 18px; }
+
+  /* assinatura: cápsula de ligação Vita ⇄ PC; é também o sítio do estado e do progresso */
+  .capsule { justify-self: center; position: relative; height: 34px; width: min(520px, 100%); min-width: 0; border-radius: 17px; background: var(--surface); border: 1px solid var(--separator);
+    display: flex; align-items: center; gap: 10px; padding: 0 14px 0 8px; overflow: hidden; box-shadow: var(--shadow); text-align: left; }
+  .capsule:hover { border-color: var(--label-3); }
+  .capsule .fill { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--accent-soft); transition: width .25s ease-out; }
+  .capsule > *:not(.fill) { position: relative; }
+  .devices { display: flex; align-items: center; gap: 4px; color: var(--label-2); flex: none; }
+  .devices svg.dev { width: 30px; height: 18px; }
+  .devices svg.dev.pc { width: 20px; }
+  .link { width: 26px; height: 2px; border-radius: 2px; background: repeating-linear-gradient(90deg, var(--label-3) 0 4px, transparent 4px 7px); }
+  .capsule.ok .link { background: repeating-linear-gradient(90deg, var(--ok) 0 4px, transparent 4px 7px); }
+  .capsule.err .link { background: repeating-linear-gradient(90deg, var(--danger) 0 4px, transparent 4px 7px); }
+  .capsule.busy .link { background: repeating-linear-gradient(90deg, var(--accent) 0 4px, transparent 4px 7px); background-size: 7px 2px; animation: flow .6s linear infinite; }
+  @keyframes flow { to { background-position: 7px 0; } }
+  .cap-text { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; min-width: 0; }
+  .cap-text .sec { color: var(--label-2); }
+  .capsule.err .cap-text { color: var(--danger); }
+  .popup { height: 32px; padding: 0 30px 0 12px; border-radius: 7px; border: 1px solid var(--separator); background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2.5' stroke-linecap='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center;
+    appearance: none; font-size: 13px; cursor: pointer; }
+  .popup option { background: var(--surface); color: var(--label); }
+  .primary { height: 32px; padding: 0 14px; border-radius: 7px; background: var(--accent-fill); color: #fff; font-weight: 600; display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+  .primary:hover { filter: brightness(1.08); }
+  .primary:disabled { opacity: .5; filter: none; }
+  .primary.spin svg { animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* popover da ligação, por baixo da cápsula */
+  .popover { position: absolute; top: 58px; left: 50%; transform: translateX(-50%); width: 360px; z-index: 20; background: var(--surface); border: 1px solid var(--separator); border-radius: 12px; box-shadow: var(--sheet-shadow); padding: 16px; }
+  .popover h3 { margin: 0 0 12px; font: 600 15px/1.3 var(--font-display); display: flex; align-items: center; gap: 8px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--label-3); flex: none; }
+  .dot.ok { background: var(--ok); } .dot.err { background: var(--danger); } .dot.busy { background: var(--warn); animation: pulse 1s infinite; }
+  @keyframes pulse { 50% { opacity: .35; } }
+  .conn-row { display: grid; grid-template-columns: 1fr 90px; gap: 8px; }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field small { color: var(--label-2); font-size: 12px; }
+  .field input, .field select { height: 32px; border-radius: 7px; border: 1px solid var(--separator); background: var(--surface-2); padding: 0 10px; outline: none; font-size: 13px; color: var(--label); width: 100%; }
+  .field input:focus, .field select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  #ip, #port { font-family: var(--mono); }
+  .pop-actions { display: flex; gap: 8px; margin-top: 12px; }
+  .pop-actions .btn { flex: 1; justify-content: center; }
+  .conn-msg { margin-top: 10px; font-size: 12.5px; color: var(--label-2); }
+  .conn-msg.ok { color: var(--ok); } .conn-msg.err { color: var(--danger); }
+  .found { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+  .found button { text-align: left; padding: 7px 10px; border-radius: 7px; background: var(--surface-2); border: 1px solid var(--separator); font-size: 12.5px; display: flex; justify-content: space-between; gap: 10px; }
+  .found button:hover { border-color: var(--accent); }
+  .found button code { font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .found button span { color: var(--label-2); flex: none; }
+  .found .none { color: var(--label-3); font-size: 12.5px; }
+
+  .btn { height: 32px; padding: 0 12px; border-radius: 7px; border: 1px solid var(--separator); background: var(--surface); font-size: 13px; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .btn:hover { background: var(--surface-2); }
+  .btn:disabled { opacity: .5; }
+  .btn.danger { color: var(--danger); }
+  .btn.small { height: 28px; padding: 0 10px; font-size: 12.5px; }
+
+  /* ---------------- corpo: barra lateral | conteúdo | inspetor ---------------- */
+  .body { flex: 1; min-height: 0; display: grid; grid-template-columns: 220px minmax(0, 1fr) 360px; }
+  .body.no-sidebar { grid-template-columns: 0 minmax(0, 1fr) 360px; }
+  .body.no-sidebar .sidebar { visibility: hidden; padding: 0; border: 0; }
+  .sidebar { background: var(--sidebar); border-right: 1px solid var(--separator); padding: 10px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; min-width: 0; }
+  .sb-head { font-size: 11.5px; font-weight: 600; color: var(--label-3); padding: 12px 10px 4px; }
+  .sb-item { height: 32px; border-radius: 7px; padding: 0 10px; display: flex; align-items: center; gap: 9px; text-align: left; width: 100%; white-space: nowrap; }
+  .sb-item svg.i { color: var(--accent); }
+  .sb-item:hover { background: rgba(127, 127, 140, .14); }
+  .sb-item[aria-current="true"] { background: var(--accent-soft); font-weight: 600; }
+  .sb-item .count { margin-left: auto; font-size: 12px; color: var(--label-3); font-variant-numeric: tabular-nums; font-weight: 400; }
+  .sb-item .count.warn { color: var(--warn); font-weight: 600; }
+
+  .content { overflow-y: auto; padding: 20px 24px 28px; min-width: 0; }
+  .col-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .col-head h1 { margin: 0; font: 600 26px/1.2 var(--font-display); letter-spacing: -.2px; }
+  .col-head .sub { color: var(--label-2); font-size: 13px; }
+  .col-tools { display: flex; align-items: center; gap: 10px; margin: 12px 0 18px; flex-wrap: wrap; }
+  .col-tools .grow { flex: 1; }
+  .col-tools .muted { color: var(--label-2); font-size: 12.5px; }
+  .search { width: 300px; max-width: 100%; height: 32px; border-radius: 7px; border: 1px solid var(--separator); background: var(--surface); display: flex; align-items: center; gap: 7px; padding: 0 10px; color: var(--label-3); }
+  .search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .search input { border: 0; outline: 0; background: none; flex: 1; min-width: 0; font-size: 13px; color: var(--label); }
+  .ghost { height: 32px; padding: 0 10px; border-radius: 7px; color: var(--label-2); display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+  .ghost:hover { background: var(--surface-2); color: var(--label); }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 22px 16px; }
+  .grid.intro .tile { animation: rise .3s both; }
   @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
-  .art { aspect-ratio: 144 / 80; background: var(--bg-2); position: relative; overflow: hidden; }
+  .tile { text-align: left; display: flex; flex-direction: column; gap: 7px; padding: 6px; border-radius: 12px; min-width: 0; }
+  .tile:hover .art { box-shadow: 0 6px 18px rgba(0,0,0,.2); }
+  .tile[aria-selected="true"] { background: var(--accent-soft); }
+  .tile[aria-selected="true"] .art { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .tile.excluded { opacity: .55; }
+  .art { aspect-ratio: 144 / 80; border-radius: 9px; overflow: hidden; background: var(--surface-2); box-shadow: var(--shadow); position: relative; transition: box-shadow .15s; }
   .art img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .art .ph {
-    position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--mono); font-weight: 700;
-    font-size: 20px; color: rgba(255,255,255,.75); letter-spacing: 1px;
-  }
-  .badge {
-    position: absolute; top: 8px; right: 8px; padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 600;
-    backdrop-filter: blur(8px); background: rgba(7,11,20,.7); border: 1px solid rgba(255,255,255,.08); display: flex; gap: 5px; align-items: center;
-  }
-  .badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-  .badge.synced { color: var(--green); }
-  .badge.downloaded { color: var(--cyan); }
-  .badge.uploaded { color: var(--blue-2); }
-  .badge.conflict { color: var(--amber); }
-  .badge.error { color: var(--red); }
-  .badge.busy { color: var(--muted); }
-  .badge.busy::before { animation: pulse 1s infinite; }
-  .meta { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 2px; flex: 1; }
-  .meta .t { font-weight: 600; font-size: 13.5px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-  .meta .s { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .meta .row { margin-top: auto; padding-top: 8px; display: flex; justify-content: space-between; color: var(--faint); font-size: 11px; gap: 8px; }
-  .meta .row code { font-family: var(--mono); }
-  .resolve { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 0 12px 12px; }
-  .resolve p { grid-column: 1 / -1; margin: 0 0 2px; color: var(--amber); font-size: 11.5px; }
-  .resolve button { padding: 7px 6px; border-radius: 9px; background: var(--surface-2); border: 1px solid var(--line); font-size: 12px; font-weight: 600; }
-  .resolve button:hover { border-color: var(--amber); }
-  .resolve button small { display: block; font-weight: 400; color: var(--muted); font-size: 10.5px; }
-  .empty { text-align: center; color: var(--muted); padding: 60px 20px; }
-  .empty b { display: block; color: var(--text); font-size: 15px; margin-bottom: 4px; }
+  .art .ph { position: absolute; inset: 0; display: grid; place-items: center; font: 700 18px var(--mono); color: rgba(255,255,255,.85); }
+  .badge-n { position: absolute; right: 6px; bottom: 6px; min-width: 22px; height: 20px; padding: 0 6px; border-radius: 10px; background: rgba(0,0,0,.62); color: #fff; font-size: 12px; font-weight: 600; display: grid; place-items: center; }
+  .where { position: absolute; left: 6px; bottom: 6px; padding: 1px 8px; border-radius: 10px; background: rgba(0,0,0,.62); color: #fff; font-size: 11.5px; font-weight: 600; }
+  .t-title { font-weight: 600; font-size: 13.5px; line-height: 1.3; padding: 0 2px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .t-sub { font-size: 12.5px; color: var(--label-2); padding: 0 2px; display: flex; align-items: center; gap: 5px; min-width: 0; }
+  .t-sub span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .t-sub svg.i { width: 13px; height: 13px; }
+  .s-synced, .s-ok { color: var(--ok); }
+  .s-downloaded, .s-uploaded, .s-plan_down, .s-plan_up, .s-busy { color: var(--accent); }
+  .s-conflict { color: var(--warn); }
+  .s-error { color: var(--danger); }
+  .s-excluded { color: var(--label-3); }
+  .empty { grid-column: 1 / -1; text-align: center; color: var(--label-2); padding: 60px 20px; }
+  .empty b { display: block; color: var(--label); font-size: 15px; margin-bottom: 4px; }
 
-  /* ---------- registo ---------- */
-  .log { margin-top: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg-2); flex: none; }
-  .log-head { display: flex; align-items: center; gap: 8px; padding: 8px 12px; color: var(--muted); font-size: 12px; width: 100%; }
-  .log-head .chev { margin-left: auto; transition: transform .2s; }
-  .log.open .chev { transform: rotate(180deg); }
-  .log-body { height: 0; overflow: auto; font-family: var(--mono); font-size: 11.5px; transition: height .2s; user-select: text; }
-  .log.open .log-body { height: 130px; border-top: 1px solid var(--line); }
-  .log-body div { padding: 2px 12px; color: var(--muted); white-space: pre-wrap; }
-  .log-body div time { color: var(--faint); margin-right: 8px; }
-  .log-body .warn { color: var(--amber); }
-  .log-body .error { color: var(--red); }
+  /* inspetor */
+  .inspector { background: var(--surface); border-left: 1px solid var(--separator); overflow-y: auto; display: flex; flex-direction: column; min-width: 0; }
+  .ins-empty { margin: auto; padding: 40px 30px; text-align: center; color: var(--label-2); font-size: 13.5px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .ins-empty svg.i { width: 40px; height: 40px; color: var(--label-3); stroke-width: 1.3; }
+  .ins-top { padding: 18px 20px 16px; border-bottom: 1px solid var(--separator); position: relative; }
+  .ins-close { position: absolute; top: 26px; right: 28px; display: none; z-index: 1; background: var(--surface); border: 1px solid var(--separator); box-shadow: var(--shadow); }
+  .ins-art { width: 100%; aspect-ratio: 144/80; border-radius: 10px; box-shadow: var(--shadow); display: block; object-fit: cover; background: var(--surface-2); }
+  .ins-top h2 { margin: 14px 0 2px; font: 600 20px/1.25 var(--font-display); }
+  .ins-meta { color: var(--label-2); font-size: 13px; display: flex; gap: 10px; flex-wrap: wrap; }
+  .ins-meta code { font-family: var(--mono); font-size: 12px; }
+  .ins-sec { padding: 14px 20px 4px; font-size: 11.5px; font-weight: 600; color: var(--label-3); }
+  .saves { padding: 0 12px 12px; display: flex; flex-direction: column; }
+  .save { padding: 12px 8px; display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; gap: 12px; align-items: start; }
+  .save + .save { border-top: 1px solid var(--separator); }
+  .save.excluded > :not(.switch-wrap) { opacity: .55; }
+  .save img.thumb { width: 56px; aspect-ratio: 144/80; border-radius: 6px; object-fit: cover; background: var(--surface-2); }
+  .save b { font-weight: 600; font-size: 13.5px; display: block; }
+  .save .det { font-size: 12.5px; color: var(--label-2); white-space: pre-line; margin-top: 2px; }
+  .save .st { font-size: 12px; display: flex; gap: 4px; align-items: center; margin-top: 4px; }
+  .save .st svg.i { width: 13px; height: 13px; }
+  .save .meta-line { font-size: 11.5px; color: var(--label-3); margin-top: 4px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .save .meta-line code { font-family: var(--mono); }
+  .switch { width: 34px; height: 20px; border-radius: 10px; background: var(--separator); position: relative; margin-top: 2px; transition: background .15s; cursor: pointer; }
+  .switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: transform .15s; }
+  .switch[aria-checked="true"] { background: var(--ok); }
+  .switch[aria-checked="true"]::after { transform: translateX(14px); }
+  .conflict { grid-column: 1 / -1; padding: 10px; border-radius: 9px; background: var(--surface-2); border: 1px solid var(--separator); }
+  .conflict p { margin: 0 0 8px; font-size: 12.5px; display: flex; gap: 6px; align-items: flex-start; }
+  .conflict p svg.i { color: var(--warn); margin-top: 1px; }
+  .segmented { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--window); border: 1px solid var(--separator); border-radius: 8px; padding: 2px; gap: 2px; }
+  .segmented button { min-height: 40px; border-radius: 6px; font-size: 12.5px; color: var(--label-2); line-height: 1.15; padding: 2px 4px; }
+  .segmented button small { display: block; font-size: 11px; color: var(--label-3); }
+  .segmented button:hover:not(:disabled) { color: var(--label); }
+  .segmented button[aria-pressed="true"] { background: var(--surface); color: var(--label); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.15); }
+  .extras { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 4px; }
+  details summary { cursor: pointer; color: var(--label-2); font-size: 12.5px; padding: 3px 0; }
+  details summary:hover { color: var(--label); }
+  .mini { display: flex; flex-direction: column; gap: 2px; margin: 4px 0 6px; font-size: 12px; }
+  .mini > div { display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 4px 8px; border-radius: 6px; background: var(--surface-2); }
+  .mini span:first-child { color: var(--label-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .mini .grow { flex: 1; color: var(--label-2); }
+  .files span:first-child { color: var(--label-2); font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ins-actions { margin-top: auto; padding: 14px 20px; border-top: 1px solid var(--separator); display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
 
-  /* ---------- toast ---------- */
-  .toast {
-    position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 20px); opacity: 0; pointer-events: none;
-    background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 16px;
-    box-shadow: 0 20px 40px -10px rgba(0,0,0,.7); transition: all .25s; display: flex; gap: 10px; align-items: center; font-size: 13px;
-  }
+  /* backups e atividade */
+  .note { color: var(--label-2); font-size: 13px; }
+  .sessions { display: flex; flex-direction: column; gap: 12px; max-width: 980px; }
+  .session { background: var(--surface); border: 1px solid var(--separator); border-radius: 12px; overflow: hidden; }
+  .session-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--separator); flex-wrap: wrap; }
+  .session-head b { font-size: 13.5px; }
+  .tag { font-size: 11px; padding: 1px 8px; border-radius: 10px; background: var(--surface-2); color: var(--label-2); border: 1px solid var(--separator); }
+  .session-head .grow { flex: 1; }
+  .session-head .sz { color: var(--label-3); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .bk-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; align-items: center; padding: 7px 14px; font-size: 13px; }
+  .bk-row + .bk-row { border-top: 1px solid var(--separator); }
+  .bk-row .who { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bk-row .who code { font-family: var(--mono); color: var(--label-3); margin-left: 6px; font-size: 11.5px; }
+  .bk-row .side { color: var(--label-2); font-size: 12px; }
+  .log-list { background: var(--surface); border: 1px solid var(--separator); border-radius: 12px; font: 12.5px/1.6 var(--mono); padding: 8px 0; max-width: 980px; user-select: text; }
+  .log-list div { padding: 1px 14px; color: var(--label-2); white-space: pre-wrap; }
+  .log-list time { color: var(--label-3); margin-right: 10px; }
+  .log-list .warn { color: var(--warn); } .log-list .error { color: var(--danger); }
+
+  /* ---------------- folhas (sheets): descem do topo da janela ---------------- */
+  .sheet-wrap { position: fixed; inset: 52px 0 0; z-index: 30; display: flex; justify-content: center; align-items: flex-start; background: var(--scrim); opacity: 0; pointer-events: none; transition: opacity .2s; }
+  .sheet-wrap.show { opacity: 1; pointer-events: auto; }
+  .sheet { width: min(620px, 94vw); max-height: calc(100% - 24px); display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--separator); border-top: 0; border-radius: 0 0 14px 14px; box-shadow: var(--sheet-shadow);
+    transform: translateY(-104%); visibility: hidden; transition: transform .26s cubic-bezier(.2,.8,.2,1), visibility 0s .26s; }
+  .sheet-wrap.show .sheet { transform: none; visibility: visible; transition: transform .26s cubic-bezier(.2,.8,.2,1); }
+  .sheet.small { width: min(460px, 94vw); }
+  .sheet h3 { margin: 0; padding: 18px 20px 2px; font: 600 17px/1.3 var(--font-display); }
+  .sheet .lead { margin: 0; padding: 2px 20px 12px; color: var(--label-2); font-size: 13px; white-space: pre-line; }
+  .sheet-body { overflow-y: auto; padding: 0 20px; min-height: 0; }
+  .sheet-actions { display: flex; align-items: center; gap: 8px; padding: 14px 20px 18px; }
+  .sheet-actions .grow { flex: 1; color: var(--label-2); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+
+  /* pré-visualização */
+  .pv-tools { display: flex; gap: 4px; margin: 0 0 8px -8px; }
+  .pv-block { border: 1px solid var(--separator); border-radius: 10px; overflow: hidden; margin-bottom: 8px; }
+  .pv-game { display: grid; grid-template-columns: 20px 52px 1fr; gap: 10px; align-items: center; padding: 8px 12px; background: var(--surface-2); cursor: pointer; }
+  .pv-game img, .pv-game .noimg { width: 52px; aspect-ratio: 144/80; border-radius: 5px; object-fit: cover; background: var(--separator); }
+  .pv-game b { display: block; font-size: 13.5px; }
+  .pv-game span { color: var(--label-2); font-size: 12px; }
+  .pv-save { display: grid; grid-template-columns: 20px 22px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 12px; border-top: 1px solid var(--separator); cursor: pointer; }
+  div.pv-save { cursor: default; }
+  .pv-save .dir { color: var(--accent); display: grid; place-items: center; }
+  .pv-save .dir.is-conflict { color: var(--warn); }
+  .pv-text { min-width: 0; }
+  .pv-text b { display: block; font-size: 13px; font-weight: 600; }
+  .pv-text span { display: block; color: var(--label-2); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pv-save .sz { color: var(--label-3); font: 12px var(--mono); }
+  .pv-list input[type=checkbox] { width: 15px; height: 15px; accent-color: var(--accent-fill); margin: 0; cursor: pointer; }
+  .cb-space { width: 15px; }
+  .pv-save .segmented { width: 250px; }
+  .pv-save .segmented button[aria-pressed="true"] { box-shadow: inset 0 0 0 1px var(--warn); }
+
+  /* definições */
+  .set { margin-bottom: 16px; }
+  .set-row { display: flex; gap: 8px; align-items: flex-end; }
+  .set-row .field { flex: 1; }
+  .set .err { color: var(--danger); font-size: 12px; margin-top: 5px; display: none; }
+  .set.bad .err { display: block; }
+  .set.bad input { border-color: var(--danger); }
+  .radios { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+  .radio { display: grid; grid-template-columns: 18px 1fr; gap: 10px; align-items: start; padding: 9px 11px; border-radius: 9px; border: 1px solid var(--separator); background: var(--surface-2); cursor: pointer; }
+  .radio:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+  .radio input { accent-color: var(--accent-fill); margin: 2px 0 0; }
+  .radio b { display: block; font-size: 13px; }
+  .radio span { color: var(--label-2); font-size: 12px; }
+  .appearance { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 6px; }
+  .appearance label { border: 1px solid var(--separator); border-radius: 9px; padding: 8px; display: flex; flex-direction: column; gap: 6px; align-items: center; font-size: 12.5px; cursor: pointer; position: relative; }
+  .appearance label:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+  .appearance label:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .appearance input { position: absolute; opacity: 0; pointer-events: none; }
+  .swatch { width: 100%; height: 38px; border-radius: 6px; border: 1px solid var(--separator); }
+  .swatch.light { background: linear-gradient(90deg, #e9e9ed 30%, #ffffff 30%); }
+  .swatch.dark { background: linear-gradient(90deg, #232326 30%, #2a2a2d 30%); }
+  .swatch.system { background: linear-gradient(135deg, #f2f2f4 50%, #1c1c1e 50%); }
+  details.adv summary { margin-bottom: 10px; }
+
+  /* toast */
+  .toast { position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 16px); opacity: 0; pointer-events: none; z-index: 40;
+    background: var(--label); color: var(--surface); border-radius: 10px; padding: 9px 16px; font-size: 13px; box-shadow: var(--sheet-shadow); transition: opacity .2s, transform .2s; }
   .toast.show { opacity: 1; transform: translate(-50%, 0); }
 
-  .where { position: absolute; left: 8px; bottom: 8px; padding: 2px 8px; border-radius: 999px; font-size: 10.5px; font-weight: 600;
-    background: rgba(7,11,20,.75); color: var(--cyan); border: 1px solid rgba(63,214,255,.35); backdrop-filter: blur(8px); }
-  .game.vita-only .art img { filter: saturate(.7) brightness(.85); }
-
-  /* ---------- definições ---------- */
-  .overlay { position: fixed; inset: 0; background: rgba(3,6,12,.65); backdrop-filter: blur(4px); display: none; place-items: center; z-index: 10; padding: 20px; }
-  .overlay.show { display: grid; animation: fade .15s; }
-  @keyframes fade { from { opacity: 0; } }
-  .dialog { width: min(560px, 100%); max-height: 100%; overflow: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 22px; box-shadow: 0 30px 80px -20px rgba(0,0,0,.9); }
-  .dialog h2 { margin: 0 0 4px; font-size: 18px; }
-  .dialog > p { margin: 0 0 18px; color: var(--muted); font-size: 13px; }
-  .set { margin-bottom: 16px; }
-  .set .field input { font-size: 12.5px; }
-  .set-row { display: flex; gap: 8px; }
-  .set-row .field { flex: 1; }
-  .btn { padding: 9px 14px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line); font-weight: 600; font-size: 13px; white-space: nowrap; }
-  .btn:hover { border-color: var(--blue); }
-  .btn.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
-  .btn.primary:hover { filter: brightness(1.1); }
-  .set .err { color: var(--red); font-size: 12px; margin-top: 5px; display: none; }
-  .set.bad .err { display: block; }
-  .set.bad input { border-color: var(--red); }
-  .found { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
-  .found button { text-align: left; padding: 8px 10px; border-radius: 9px; background: var(--bg-2); border: 1px solid var(--line); font-size: 12px; display: flex; justify-content: space-between; gap: 10px; }
-  .found button:hover { border-color: var(--blue); }
-  .found button code { font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .found button span { color: var(--muted); flex: none; }
-  .found .none { color: var(--faint); font-size: 12px; }
-  .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 22px; }
-  details summary { cursor: pointer; color: var(--muted); font-size: 12.5px; margin-bottom: 10px; }
-
-  /* ---------- vistas ---------- */
-  .view { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-  .view[hidden] { display: none; }
-  .game { cursor: pointer; }
-  .count-pill { position: absolute; left: 8px; top: 8px; padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 600;
-    background: rgba(7,11,20,.7); border: 1px solid rgba(255,255,255,.08); backdrop-filter: blur(8px); }
-
-  /* ---------- página do jogo ---------- */
-  .hero { position: relative; border-radius: 18px; overflow: hidden; border: 1px solid var(--line); background: var(--surface); margin-bottom: 14px; min-height: 190px; display: flex; flex-direction: column; }
-  .hero-bg { position: absolute; inset: 0; background-size: cover; background-position: center; opacity: .55; transition: background-image .3s; }
-  .hero::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(7,11,20,.15) 0%, rgba(11,18,34,.92) 78%); }
-  .back { position: relative; z-index: 1; align-self: flex-start; margin: 12px; padding: 6px 12px 6px 8px; border-radius: 999px; display: flex; gap: 4px; align-items: center;
-    background: rgba(7,11,20,.6); border: 1px solid rgba(255,255,255,.1); backdrop-filter: blur(8px); font-size: 12.5px; font-weight: 600; }
-  .back:hover { background: rgba(7,11,20,.85); }
-  .hero-body { position: relative; z-index: 1; margin-top: auto; display: flex; align-items: flex-end; gap: 16px; padding: 18px; flex-wrap: wrap; }
-  .hero-icon { width: 144px; aspect-ratio: 144/80; border-radius: 10px; overflow: hidden; flex: none; box-shadow: 0 10px 30px -8px rgba(0,0,0,.8); border: 1px solid rgba(255,255,255,.12); background: var(--bg-2); }
-  .hero-icon img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .hero-text { flex: 1; min-width: 200px; }
-  .hero-text code { font-family: var(--mono); font-size: 11.5px; color: var(--cyan); letter-spacing: .5px; }
-  .hero-text h2 { margin: 2px 0 6px; font-size: 24px; font-weight: 700; letter-spacing: -.3px; line-height: 1.15; }
-  .hero-stats { display: flex; gap: 14px; color: var(--muted); font-size: 12.5px; flex-wrap: wrap; }
-  .hero-stats b { color: var(--text); font-weight: 600; }
-
-  .saves { display: flex; flex-direction: column; gap: 10px; }
-  .save { display: grid; grid-template-columns: 112px 1fr auto; gap: 14px; padding: 12px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); animation: rise .25s both; }
-  .save .thumb { width: 112px; aspect-ratio: 144/80; border-radius: 8px; overflow: hidden; background: var(--bg-2); position: relative; }
-  .save .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .save .info { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-  .save .name { font-weight: 650; font-size: 14.5px; }
-  .save .detail { color: var(--text); opacity: .85; font-size: 12.5px; white-space: pre-line; line-height: 1.5;
-    background: var(--bg-2); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; margin-top: 4px; align-self: flex-start; max-width: 100%; }
-  .save .sub { color: var(--faint); font-size: 11.5px; display: flex; gap: 12px; flex-wrap: wrap; margin-top: 4px; }
-  .save .sub code { font-family: var(--mono); color: var(--muted); }
-  .save .side-col { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
-  .save .badge { position: static; }
-  .save .resolve { padding: 0; grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 200px)); }
-  .save details { grid-column: 1 / -1; }
-  .save details summary { margin: 0; font-size: 12px; }
-  .files { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 2px 16px; margin-top: 8px; font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
-  .files div { display: flex; justify-content: space-between; gap: 8px; border-bottom: 1px dashed var(--line); padding: 3px 0; }
-  .files span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  /* ---------- ligação ---------- */
-  .conn-actions { display: flex; gap: 6px; margin-top: 10px; }
-  .btn.small { padding: 6px 10px; font-size: 12px; border-radius: 9px; flex: 1; }
-  .btn:disabled { opacity: .5; cursor: default; }
-  .btn.danger:hover { border-color: var(--red); color: var(--red); }
-  .conn-msg { margin-top: 10px; color: var(--faint); font-size: 12px; }
-  .conn-msg.ok { color: var(--green); }
-  .conn-msg.err { color: var(--red); }
-  #vitaFound button code { font-size: 12px; }
-  .speed { font-size: 11.5px; color: var(--faint); min-height: 16px; font-variant-numeric: tabular-nums; }
-
-  /* ---------- pré-visualização ---------- */
-  .dialog.wide { width: min(680px, 100%); }
-  #cfText { white-space: pre-line; }
-  .pv-tools { display: flex; gap: 4px; margin: -8px 0 8px -8px; }
-  .pv-count { margin-right: auto; align-self: center; color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; }
-  .pv-block { border: 1px solid var(--line); border-radius: 12px; background: var(--bg-2); overflow: hidden; flex: none; }
-  .pv-game { display: grid; grid-template-columns: 20px 64px 1fr; gap: 10px; align-items: center; padding: 8px 10px; cursor: pointer; background: rgba(255,255,255,.02); }
-  .pv-game img, .pv-game .noimg { width: 64px; aspect-ratio: 144/80; border-radius: 6px; object-fit: cover; background: var(--surface-2); }
-  .pv-game b { display: block; font-size: 13.5px; }
-  .pv-game span { color: var(--muted); font-size: 11.5px; }
-  .pv-save { display: grid; grid-template-columns: 20px 26px 1fr auto; gap: 10px; align-items: center; padding: 7px 10px 7px 10px; border-top: 1px solid var(--line); cursor: pointer; }
-  div.pv-save { cursor: default; }
-  .pv-save:hover { background: rgba(255,255,255,.025); }
-  .pv-save .dir { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 13px; }
-  .pv-save .dir.down { background: rgba(63,214,255,.15); color: var(--cyan); }
-  .pv-save .dir.up { background: rgba(90,160,255,.15); color: var(--blue-2); }
-  .pv-save .dir.conflict { background: rgba(255,181,71,.15); color: var(--amber); }
-  .pv-text { min-width: 0; }
-  .pv-text b { display: block; font-size: 12.5px; font-weight: 600; }
-  .pv-text span { display: block; color: var(--muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .pv-save .sz { color: var(--faint); font-size: 11.5px; font-family: var(--mono); }
-  .pv-list input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--blue); margin: 0; cursor: pointer; }
-  .cb-space { width: 16px; }
-  .seg { display: flex; gap: 2px; background: var(--surface); border: 1px solid var(--line); border-radius: 9px; padding: 2px; }
-  .seg button { padding: 4px 10px; border-radius: 7px; font-size: 12px; font-weight: 600; color: var(--muted); line-height: 1.2; }
-  .seg button small { display: block; font-weight: 400; font-size: 10px; color: var(--faint); }
-  .seg button.on { background: var(--amber); color: #1a1205; }
-  .seg button.on small { color: rgba(26,18,5,.7); }
-  .seg button:not(.on):hover { color: var(--text); background: var(--surface-2); }
-  @media (max-width: 700px) { .pv-save { grid-template-columns: 20px 26px 1fr; } .pv-save .seg, .pv-save .sz { grid-column: 3; justify-self: start; } }
-  .radios { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
-  .radio { display: grid; grid-template-columns: 18px 1fr; gap: 10px; align-items: start; padding: 9px 11px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg-2); cursor: pointer; }
-  .radio:has(input:checked) { border-color: var(--blue); background: rgba(47,123,255,.1); }
-  .radio input { accent-color: var(--blue); margin: 2px 0 0; }
-  .radio b { display: block; font-size: 13px; }
-  .radio span { color: var(--muted); font-size: 12px; }
-  .pv-list { display: flex; flex-direction: column; gap: 6px; max-height: 50vh; overflow: auto; }
-
-  /* ---------- backups ---------- */
-  .back.flat { margin: 0; background: var(--surface); border-color: var(--line); }
-  .note { color: var(--muted); font-size: 12.5px; margin: -4px 0 12px; }
-  .sessions { display: flex; flex-direction: column; gap: 10px; }
-  .session { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
-  .session-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-  .session-head b { font-size: 14px; }
-  .session-head .tag { font-size: 10.5px; padding: 2px 8px; border-radius: 999px; background: var(--surface-2); color: var(--muted); border: 1px solid var(--line); }
-  .session-head .grow { flex: 1; }
-  .session-head .sz { color: var(--faint); font-size: 12px; font-family: var(--mono); }
-  .bk-rows { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
-  .bk-row { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center; padding: 6px 8px; border-radius: 8px; background: var(--bg-2); font-size: 12.5px; }
-  .bk-row .who { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .bk-row .who code { font-family: var(--mono); color: var(--faint); margin-left: 6px; font-size: 11px; }
-  .bk-row .side { color: var(--muted); font-size: 11.5px; }
-
-  /* ---------- extras no save ---------- */
-  .save.excluded { opacity: .55; }
-  .save.excluded:hover { opacity: .85; }
-  .toggle { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); cursor: pointer; }
-  .toggle input { appearance: none; width: 30px; height: 17px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); position: relative; cursor: pointer; transition: background .15s; margin: 0; }
-  .toggle input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 11px; height: 11px; border-radius: 50%; background: var(--muted); transition: transform .15s, background .15s; }
-  .toggle input:checked { background: var(--blue); border-color: var(--blue); }
-  .toggle input:checked::after { transform: translateX(13px); background: #fff; }
-  .extras { grid-column: 1 / -1; display: flex; gap: 16px; flex-wrap: wrap; }
-  .extras details { flex: 1; min-width: 220px; }
-  .hist, .bks { display: flex; flex-direction: column; gap: 3px; margin-top: 6px; font-size: 12px; }
-  .hist div, .bks div { display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 4px 8px; border-radius: 7px; background: var(--bg-2); }
-  .hist span:first-child, .bks span:first-child { color: var(--faint); font-variant-numeric: tabular-nums; }
-  .bks button { padding: 3px 9px; font-size: 11.5px; }
-  .badge.excluded { color: var(--faint); }
-  .badge.plan_down { color: var(--cyan); }
-  .badge.plan_up { color: var(--blue-2); }
-
-  @media (max-width: 900px) { .save { grid-template-columns: 84px 1fr; } .save .thumb { width: 84px; } .save .side-col { grid-column: 1 / -1; flex-direction: row; align-items: center; } }
+  /* ecrãs mais estreitos: o inspetor passa a painel por cima; depois esconde-se a barra lateral */
+  @media (max-width: 1180px) {
+    .body { grid-template-columns: 200px minmax(0, 1fr); }
+    .body.no-sidebar { grid-template-columns: 0 minmax(0, 1fr); }
+    .inspector { position: fixed; top: 52px; right: 0; bottom: 0; width: min(380px, 100%); z-index: 15; box-shadow: var(--sheet-shadow); transform: translateX(105%); transition: transform .24s cubic-bezier(.2,.8,.2,1); }
+    .inspector.open { transform: none; }
+    .ins-close { display: inline-flex; }
+  }
+  @media (max-width: 760px) {
+    .body, .body.no-sidebar { grid-template-columns: 0 minmax(0, 1fr); }
+    .sidebar { visibility: hidden; padding: 0; border: 0; }
+    .app-title, #modeSelect { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 </style>
 </head>
 <body>
-  <div class="app">
-    <aside class="side">
-      <div class="brand">
-        <div class="logo"></div>
-        <div class="name">Vita Save Sync <span>· PPSSPP</span></div>
-        <button class="icon-btn" id="btnSettings" data-i18n-title="settings">
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-        </button>
+  <header class="toolbar">
+    <div class="tb-left">
+      <button class="tb-btn" id="btnSidebar" data-i18n-title="toggle_sidebar" data-i18n-aria="toggle_sidebar"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16"/></svg></button>
+      <span class="app-title">Vita Save Sync</span>
+    </div>
+    <button class="capsule" id="capsule" aria-haspopup="dialog" aria-controls="connPop" aria-expanded="false">
+      <span class="fill" id="fill"></span>
+      <span class="devices" aria-hidden="true">
+        <svg class="dev" viewBox="0 0 30 18"><rect x=".8" y=".8" width="28.4" height="16.4" rx="8.2" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="9" y="3.5" width="12" height="11" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>
+        <span class="link"></span>
+        <svg class="dev pc" viewBox="0 0 20 18"><rect x="1" y="1" width="18" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M7 17h6M10 13v4" stroke="currentColor" stroke-width="1.4" fill="none"/></svg>
+      </span>
+      <span class="cap-text" id="capText" role="status" aria-live="polite"></span>
+    </button>
+    <div class="tb-right">
+      <select class="popup" id="modeSelect" data-i18n-aria="mode">
+        <option value="auto" data-i18n="mode_auto"></option>
+        <option value="vita_to_pc">Vita → PC</option>
+        <option value="pc_to_vita">PC → Vita</option>
+      </select>
+      <button class="primary" id="syncBtn"><svg class="i" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-15.5 6.2M3 12A9 9 0 0 1 18.5 5.8"/><path d="M18 2v4h-4M6 22v-4h4"/></svg><span id="syncLabel"></span></button>
+      <button class="tb-btn" id="btnTheme" data-i18n-title="night_mode" data-i18n-aria="night_mode" aria-pressed="false">
+        <svg class="i moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+        <svg class="i sun" viewBox="0 0 24 24" hidden><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+      </button>
+      <button class="tb-btn" id="btnSettings" data-i18n-title="settings" data-i18n-aria="settings"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+    </div>
+    <div class="popover" id="connPop" role="dialog" aria-labelledby="connTitle" hidden>
+      <h3 id="connTitle"><span class="dot" id="connDot"></span><span data-i18n="conn_title"></span></h3>
+      <div class="conn-row">
+        <label class="field"><small data-i18n="ip_label"></small><input id="ip" placeholder="192.168.1.100" spellcheck="false"></label>
+        <label class="field"><small data-i18n="port_label"></small><input id="port" placeholder="1337" spellcheck="false"></label>
       </div>
-      <section class="card">
-        <div class="label"><span class="dot" id="connDot"></span> PS Vita · FTP</div>
-        <div class="conn-row">
-          <label class="field"><small data-i18n="ip_label"></small><input id="ip" placeholder="192.168.1.100" spellcheck="false"></label>
-          <label class="field"><small data-i18n="port_label"></small><input id="port" placeholder="1337" spellcheck="false"></label>
+      <div class="pop-actions">
+        <button class="btn" id="btnTest" data-i18n="btn_test"></button>
+        <button class="btn" id="btnFind" data-i18n="btn_find"></button>
+      </div>
+      <div class="conn-msg" id="connMsg"></div>
+      <div class="found" id="vitaFound"></div>
+    </div>
+  </header>
+
+  <div class="body" id="bodyGrid">
+    <nav class="sidebar" id="sidebar" data-i18n-aria="sidebar">
+      <div class="sb-head" data-i18n="library"></div>
+      <button class="sb-item" data-view="library" data-filter="all"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span data-i18n="all_games"></span><span class="count" id="cntAll"></span></button>
+      <button class="sb-item" data-view="library" data-filter="changed"><svg class="i" viewBox="0 0 24 24"><path d="M7 7h11l-3-3M17 17H6l3 3"/></svg><span data-i18n="filter_changed"></span><span class="count" id="cntChanged"></span></button>
+      <button class="sb-item" data-view="library" data-filter="conflict"><svg class="i" viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg><span data-i18n="filter_conflicts"></span><span class="count warn" id="cntConflict"></span></button>
+      <button class="sb-item" data-view="library" data-filter="vita"><svg class="i" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="10" rx="5"/><rect x="8" y="9" width="8" height="6" rx="1"/></svg><span data-i18n="vita_only"></span><span class="count" id="cntVita"></span></button>
+      <div class="sb-head" data-i18n="archive"></div>
+      <button class="sb-item" data-view="backups"><svg class="i" viewBox="0 0 24 24"><path d="M3 7h18v13H3zM3 7l2-3h14l2 3M9 12h6"/></svg><span data-i18n="backups"></span><span class="count" id="cntBackups"></span></button>
+      <button class="sb-item" data-view="activity"><svg class="i" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span data-i18n="activity"></span></button>
+    </nav>
+
+    <main class="content" id="content">
+      <section class="view" id="libraryView" aria-labelledby="libTitle">
+        <div class="col-head"><h1 id="libTitle"></h1><span class="sub" id="count"></span></div>
+        <div class="col-tools">
+          <label class="search"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="search" data-i18n-ph="search_ph" spellcheck="false"></label>
+          <span class="grow"></span>
+          <button class="ghost" id="openPc"><svg class="i" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span data-i18n="open_ppsspp"></span></button>
         </div>
-        <div class="conn-actions">
-          <button class="btn small" id="btnTest" data-i18n="btn_test"></button>
-          <button class="btn small" id="btnFind" data-i18n="btn_find"></button>
-        </div>
-        <div class="conn-msg" id="connMsg" data-i18n-html="conn_hint"></div>
-        <div class="found" id="vitaFound"></div>
+        <div class="grid" id="grid" role="listbox" data-i18n-aria="games"></div>
       </section>
 
-      <section class="card">
-        <div class="label" data-i18n="mode"></div>
-        <div class="modes" id="modes">
-          <button class="mode" data-mode="auto">
-            <div class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 1-15.5 6.2M3 12A9 9 0 0 1 18.5 5.8"/><path d="M18 2v4h-4M6 22v-4h4"/></svg></div>
-            <div><b data-i18n="mode_auto"></b><span data-i18n="mode_auto_desc"></span></div>
-          </button>
-          <button class="mode" data-mode="vita_to_pc">
-            <div class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
-            <div><b>Vita → PC</b><span data-i18n="mode_v2p_desc"></span></div>
-          </button>
-          <button class="mode" data-mode="pc_to_vita">
-            <div class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M19 12H5M11 6l-6 6 6 6"/></svg></div>
-            <div><b>PC → Vita</b><span data-i18n="mode_p2v_desc"></span></div>
-          </button>
-        </div>
+      <section class="view" id="backupsView" hidden>
+        <div class="col-head"><h1 data-i18n="backups"></h1><span class="sub" id="backupsCount"></span></div>
+        <div class="col-tools"><span class="note" id="backupsNote"></span><span class="grow"></span>
+          <button class="ghost" id="openBackupFolder"><svg class="i" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span data-i18n="open_folder"></span></button></div>
+        <div class="sessions" id="sessions"></div>
       </section>
 
-      <section class="sync">
-        <button class="sync-btn" id="syncBtn">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 1-15.5 6.2M3 12A9 9 0 0 1 18.5 5.8"/><path d="M18 2v4h-4M6 22v-4h4"/></svg>
-          <span id="syncLabel"></span>
-        </button>
-        <div class="progress"><i id="bar"></i></div>
-        <div class="status" id="status"></div>
-        <div class="speed" id="speed"></div>
-      </section>
-    </aside>
-
-    <main class="main">
-     <div class="view" id="libraryView">
-      <div class="main-head">
-        <h1><span data-i18n="games"></span> <small id="count"></small></h1>
-        <div class="grow"></div>
-        <div class="chips" id="chips">
-          <button class="chip on" data-filter="all" data-i18n="filter_all"></button>
-          <button class="chip" data-filter="changed" data-i18n="filter_changed"></button>
-          <button class="chip" data-filter="conflict"><span data-i18n="filter_conflicts"></span><span class="n" id="conflictN"></span></button>
-        </div>
-        <label class="search">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
-          <input id="search" data-i18n-ph="search_ph" spellcheck="false">
-        </label>
-      </div>
-      <div class="main-head" style="margin-top:-6px">
-        <span class="status" id="lastSync" style="margin:0"></span>
-        <div class="grow"></div>
-        <button class="ghost" id="openPc">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span data-i18n="open_ppsspp"></span></button>
-        <button class="ghost" id="openBackup">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="9"/></svg><span data-i18n="backups"></span></button>
-      </div>
-
-      <div class="grid-wrap"><div class="grid" id="grid"></div></div>
-     </div>
-
-     <div class="view" id="backupsView" hidden>
-      <div class="main-head">
-        <button class="back flat" id="btnBackupsBack">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M15 6l-6 6 6 6"/></svg><span data-i18n="games"></span></button>
-        <h1><span data-i18n="backups"></span> <small id="backupsCount"></small></h1>
-        <div class="grow"></div>
-        <button class="ghost" id="openBackupFolder">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span data-i18n="open_folder"></span></button>
-      </div>
-      <div class="note" id="backupsNote"></div>
-      <div class="grid-wrap"><div class="sessions" id="sessions"></div></div>
-     </div>
-
-     <div class="view" id="gameView" hidden>
-      <div class="grid-wrap" id="gameScroll">
-        <div class="hero" id="hero">
-          <div class="hero-bg" id="heroBg"></div>
-          <button class="back" id="btnBack">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M15 6l-6 6 6 6"/></svg><span data-i18n="games"></span></button>
-          <div class="hero-body">
-            <div class="hero-icon" id="heroIcon"></div>
-            <div class="hero-text">
-              <code id="heroCode"></code>
-              <h2 id="heroTitle"></h2>
-              <div class="hero-stats" id="heroStats"></div>
-            </div>
-            <button class="btn primary" id="btnSyncGame" data-i18n="sync_game"></button>
-          </div>
-        </div>
-        <div class="saves" id="saves"></div>
-      </div>
-     </div>
-
-      <section class="log" id="log">
-        <button class="log-head" id="logToggle">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
-          <span data-i18n="activity"></span> <span id="logLast" style="color:var(--faint);overflow:hidden;white-space:nowrap;text-overflow:ellipsis"></span>
-          <svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 15l6-6 6 6"/></svg>
-        </button>
-        <div class="log-body" id="logBody"></div>
+      <section class="view" id="activityView" hidden>
+        <div class="col-head"><h1 data-i18n="activity"></h1></div>
+        <div class="col-tools"><span class="note" data-i18n="activity_note"></span></div>
+        <div class="log-list" id="logBody"><div id="logEmpty" data-i18n="no_activity"></div></div>
       </section>
     </main>
+
+    <aside class="inspector" id="inspector" data-i18n-aria="game_details"></aside>
   </div>
 
-  <div class="toast" id="toast"></div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <div class="overlay" id="settings">
-    <div class="dialog">
-      <h2 data-i18n="settings"></h2>
-      <p data-i18n="settings_sub"></p>
-
-      <div class="set">
-        <label class="field"><small data-i18n="language"></small>
-          <select id="langSelect"></select></label>
-      </div>
-
-      <div class="set" id="setPc">
-        <label class="field"><small data-i18n="pc_dir_label"></small></label>
-        <div class="set-row">
-          <label class="field"><input id="pcDir" spellcheck="false"></label>
-          <button class="btn" data-browse="pcDir" data-i18n="browse"></button>
-          <button class="btn" id="btnDetect" data-i18n="detect"></button>
+  <!-- Definições -->
+  <div class="sheet-wrap" id="settings">
+    <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="setTitle">
+      <h3 id="setTitle" data-i18n="settings"></h3>
+      <p class="lead" data-i18n="settings_sub"></p>
+      <div class="sheet-body">
+        <div class="set">
+          <label class="field"><small data-i18n="appearance"></small></label>
+          <div class="appearance" role="radiogroup" data-i18n-aria="appearance">
+            <label><input type="radio" name="appearance" value="system"><span class="swatch system"></span><span data-i18n="appearance_system"></span></label>
+            <label><input type="radio" name="appearance" value="light"><span class="swatch light"></span><span data-i18n="appearance_light"></span></label>
+            <label><input type="radio" name="appearance" value="dark"><span class="swatch dark"></span><span data-i18n="appearance_dark"></span></label>
+          </div>
         </div>
-        <div class="err"></div>
-        <div class="found" id="found"></div>
-      </div>
-
-      <div class="set" id="setBackup">
-        <label class="field"><small data-i18n="backup_dir_label"></small></label>
-        <div class="set-row">
-          <label class="field"><input id="backupDir" spellcheck="false"></label>
-          <button class="btn" data-browse="backupDir" data-i18n="browse"></button>
+        <div class="set"><label class="field"><small data-i18n="language"></small><select id="langSelect"></select></label></div>
+        <div class="set" id="setPc">
+          <div class="set-row">
+            <label class="field"><small data-i18n="pc_dir_label"></small><input id="pcDir" spellcheck="false"></label>
+            <button class="btn" data-browse="pcDir" data-i18n="browse"></button>
+            <button class="btn" id="btnDetect" data-i18n="detect"></button>
+          </div>
+          <div class="err"></div>
+          <div class="found" id="found"></div>
         </div>
-        <div class="err"></div>
-      </div>
-
-      <div class="set">
-        <label class="field"><small data-i18n="before_copy"></small></label>
-        <div class="radios">
-          <label class="radio"><input type="radio" name="confirm" value="checked">
-            <div><b data-i18n="confirm_checked"></b><span data-i18n="confirm_checked_desc"></span></div></label>
-          <label class="radio"><input type="radio" name="confirm" value="unchecked">
-            <div><b data-i18n="confirm_unchecked"></b><span data-i18n="confirm_unchecked_desc"></span></div></label>
-          <label class="radio"><input type="radio" name="confirm" value="direct">
-            <div><b data-i18n="confirm_direct"></b><span data-i18n="confirm_direct_desc"></span></div></label>
-        </div>
-      </div>
-
-      <div class="set" id="setKeep">
-        <label class="field"><small data-i18n="keep_label"></small>
-          <input id="keepBackups" type="number" min="0" style="width:120px"></label>
-        <div class="err"></div>
-      </div>
-
-      <details>
-        <summary data-i18n="advanced"></summary>
-        <div class="set" id="setVita">
-          <label class="field"><small data-i18n="vita_dir_label"></small>
-            <input id="vitaDir" spellcheck="false"></label>
+        <div class="set" id="setBackup">
+          <div class="set-row">
+            <label class="field"><small data-i18n="backup_dir_label"></small><input id="backupDir" spellcheck="false"></label>
+            <button class="btn" data-browse="backupDir" data-i18n="browse"></button>
+          </div>
           <div class="err"></div>
         </div>
-      </details>
-
-      <div class="dialog-actions">
+        <div class="set">
+          <label class="field"><small data-i18n="before_copy"></small></label>
+          <div class="radios">
+            <label class="radio"><input type="radio" name="confirm" value="checked"><div><b data-i18n="confirm_checked"></b><span data-i18n="confirm_checked_desc"></span></div></label>
+            <label class="radio"><input type="radio" name="confirm" value="unchecked"><div><b data-i18n="confirm_unchecked"></b><span data-i18n="confirm_unchecked_desc"></span></div></label>
+            <label class="radio"><input type="radio" name="confirm" value="direct"><div><b data-i18n="confirm_direct"></b><span data-i18n="confirm_direct_desc"></span></div></label>
+          </div>
+        </div>
+        <div class="set" id="setKeep">
+          <label class="field"><small data-i18n="keep_label"></small><input id="keepBackups" type="number" min="0" style="width:120px"></label>
+          <div class="err"></div>
+        </div>
+        <details class="adv">
+          <summary data-i18n="advanced"></summary>
+          <div class="set" id="setVita">
+            <label class="field"><small data-i18n="vita_dir_label"></small><input id="vitaDir" spellcheck="false"></label>
+            <div class="err"></div>
+          </div>
+        </details>
+      </div>
+      <div class="sheet-actions"><span class="grow"></span>
         <button class="btn" id="btnCancel" data-i18n="cancel"></button>
-        <button class="btn primary" id="btnSave" data-i18n="save"></button>
+        <button class="primary" id="btnSave" data-i18n="save"></button>
       </div>
-    </div>
+    </section>
   </div>
 
-  <div class="overlay" id="preview">
-    <div class="dialog wide">
-      <h2 data-i18n="pv_title"></h2>
-      <p id="pvSub"></p>
-      <div class="pv-tools">
-        <button class="ghost" id="pvAll" data-i18n="select_all"></button>
-        <button class="ghost" id="pvNone" data-i18n="select_none"></button>
+  <!-- Pré-visualização -->
+  <div class="sheet-wrap" id="preview">
+    <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="pvTitle">
+      <h3 id="pvTitle" data-i18n="pv_title"></h3>
+      <p class="lead" id="pvSub"></p>
+      <div class="sheet-body pv-list">
+        <div class="pv-tools">
+          <button class="ghost" id="pvAll" data-i18n="select_all"></button>
+          <button class="ghost" id="pvNone" data-i18n="select_none"></button>
+        </div>
+        <div id="pvList"></div>
       </div>
-      <div class="pv-list" id="pvList"></div>
-      <div class="dialog-actions">
-        <span class="pv-count" id="pvCount"></span>
+      <div class="sheet-actions">
+        <span class="grow" id="pvCount"></span>
         <button class="btn" id="pvCancel" data-i18n="cancel"></button>
-        <button class="btn primary" id="pvGo" data-i18n="copy"></button>
+        <button class="primary" id="pvGo" data-i18n="copy"></button>
       </div>
-    </div>
+    </section>
   </div>
 
-  <div class="overlay" id="confirm">
-    <div class="dialog">
-      <h2 id="cfTitle"></h2>
-      <p id="cfText"></p>
-      <div class="dialog-actions">
+  <!-- Confirmação -->
+  <div class="sheet-wrap" id="confirm">
+    <section class="sheet small" role="alertdialog" aria-modal="true" aria-labelledby="cfTitle">
+      <h3 id="cfTitle"></h3>
+      <p class="lead" id="cfText"></p>
+      <div class="sheet-actions"><span class="grow"></span>
         <button class="btn" id="cfNo" data-i18n="cancel"></button>
-        <button class="btn primary" id="cfYes"></button>
+        <button class="primary" id="cfYes"></button>
       </div>
-    </div>
+    </section>
   </div>
 
 <script src="i18n.js"></script>
@@ -589,19 +499,37 @@ const state = {
   games: new Map(),     // id do save -> info (título, ícone…)
   results: new Map(),   // id do save -> resultado da última sincronização
   excluded: new Set(),
-  filter: "all",
+  filter: "all",        // all | changed | conflict | vita
   query: "",
   busy: false,
-  view: "library",      // library | game | backups
-  openGame: null,
+  view: "library",      // library | backups | activity
+  selected: null,       // código do jogo aberto no inspetor
   details: {},          // id do save -> {files, size, pic, history, backups}
   lastSync: null,
+  conn: "idle",         // idle | ok | err
+  speedText: "",
 };
 let config = {};
-// Mensagens atuais guardadas como chave + parâmetros, para se poderem traduzir de novo
-// quando o idioma muda.
+// Mensagens guardadas como chave + parâmetros, para se poderem traduzir de novo quando o idioma muda.
 let statusMsg = { key: "ready", args: {}, cls: "" };
-let connMsgState = { key: "conn_hint", args: {}, cls: "", html: true };
+let connMsgState = { key: "conn_hint", args: {}, cls: "" };
+
+/* ---------- ícones (um só traço, do tamanho do texto ao lado) ---------- */
+const SVG = (d) => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`;
+const ICON = {
+  synced: SVG('<path d="M5 12l5 5L20 7"/>'),
+  downloaded: SVG('<path d="M12 5v14M6 13l6 6 6-6"/>'),
+  plan_down: SVG('<path d="M12 5v14M6 13l6 6 6-6"/>'),
+  uploaded: SVG('<path d="M12 19V5M6 11l6-6 6 6"/>'),
+  plan_up: SVG('<path d="M12 19V5M6 11l6-6 6 6"/>'),
+  conflict: SVG('<path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>'),
+  error: SVG('<circle cx="12" cy="12" r="9"/><path d="M15 9l-6 6M9 9l6 6"/>'),
+  excluded: SVG('<circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/>'),
+  busy: SVG('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'),
+  folder: SVG('<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'),
+  close: SVG('<path d="M6 6l12 12M18 6L6 18"/>'),
+  pick: SVG('<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>'),
+};
 
 /* ---------- formatação ---------- */
 function fmtDate(ts) {
@@ -632,20 +560,42 @@ function fmtEta(s) {
 const modeName = (m) => ({ auto: t("mode_auto"), vita_to_pc: "Vita → PC", pc_to_vita: "PC → Vita" })[m] || m;
 function hue(str) { let h = 0; for (const c of str) h = (h * 31 + c.charCodeAt(0)) % 360; return h; }
 function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
-function img(src) { return Object.assign(el("img"), { src, alt: "" }); }
+function img(src, cls) { return Object.assign(el("img", cls), { src: src || "", alt: "" }); }
+function iconText(status, text) { const s = el("span", `st s-${status}`); s.innerHTML = ICON[status] || ""; s.append(el("span", null, text)); return s; }
 const gameCode = (id) => (id.match(/^[A-Z]{4}\d{5}/) || [id])[0];
 const saveName = (id) => { const s = state.games.get(id); return s ? (s.title || id) + (s.subtitle ? " · " + s.subtitle : "") : id; };
 const statusText = (st) => t("st_" + st);
 const PRIORITY = ["busy", "conflict", "error", "downloaded", "uploaded", "plan_down", "plan_up", "synced", "excluded"];
 
+/* ---------- aparência (modo noturno) ---------- */
+const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
+const isDark = () => config.appearance === "dark" || (config.appearance !== "light" && darkQuery.matches);
+function applyAppearance() {
+  const dark = isDark();
+  document.documentElement.classList.toggle("dark", dark);
+  $("btnTheme").setAttribute("aria-pressed", dark);
+  $("btnTheme").querySelector(".moon").hidden = dark;
+  $("btnTheme").querySelector(".sun").hidden = !dark;
+}
+darkQuery.addEventListener("change", applyAppearance);
+async function setAppearance(mode) {
+  config.appearance = mode;
+  applyAppearance();
+  config.appearance = await api().set_appearance(mode);   // também pinta a barra de título do Windows
+  const r = document.querySelector(`input[name=appearance][value="${config.appearance}"]`);
+  if (r) r.checked = true;
+}
+// botão da lua/sol: troca já entre claro e escuro (nas Definições há também "Sistema")
+$("btnTheme").onclick = () => setAppearance(isDark() ? "light" : "dark");
+
 /* ---------- idioma ---------- */
 function setLanguage(setting) {
   LANG = pickLanguage(setting);
   applyStaticI18n();
+  document.querySelectorAll("[data-i18n-aria]").forEach((e) => e.setAttribute("aria-label", t(e.dataset.i18nAria)));
   $("syncLabel").textContent = state.busy ? t("syncing") : t("sync");
   setStatus(statusMsg.key, statusMsg.args, statusMsg.cls);
   connMsg(connMsgState.key, connMsgState.args, connMsgState.cls);
-  $("lastSync").textContent = fmtLastSync();
   const sel = $("langSelect");
   sel.replaceChildren(new Option(t("lang_auto"), ""), ...Object.entries(LANGS).map(([k, v]) => new Option(v.name, k)));
   sel.value = config.language || "";
@@ -654,13 +604,19 @@ function setLanguage(setting) {
 }
 
 /* ---------- vistas ---------- */
-function showView(v) {
+function showView(v, filter) {
   state.view = v;
+  if (filter) state.filter = filter;
   $("libraryView").hidden = v !== "library";
-  $("gameView").hidden = v !== "game";
   $("backupsView").hidden = v !== "backups";
-  if (v !== "game") state.openGame = null;
+  $("activityView").hidden = v !== "activity";
+  document.querySelectorAll(".sb-item").forEach((b) =>
+    b.setAttribute("aria-current", b.dataset.view === v && (v !== "library" || b.dataset.filter === state.filter)));
+  if (v === "backups") openBackups();
+  render();
 }
+document.querySelectorAll(".sb-item").forEach((b) => (b.onclick = () => showView(b.dataset.view, b.dataset.filter)));
+$("btnSidebar").onclick = () => $("bodyGrid").classList.toggle("no-sidebar");
 
 /* ---------- agrupar saves por jogo ---------- */
 function groups() {
@@ -693,13 +649,13 @@ function artFor(code, icon) {
   if (icon) art.append(img(icon));
   else {
     const h = hue(code);
-    art.style.background = `linear-gradient(135deg, hsl(${h} 70% 35%), hsl(${(h + 60) % 360} 70% 22%))`;
+    art.style.background = `linear-gradient(135deg, hsl(${h} 55% 42%), hsl(${(h + 50) % 360} 55% 28%))`;
     art.append(el("div", "ph", code.slice(0, 4)));
   }
   return art;
 }
 
-/* ---------- grelha de jogos ---------- */
+/* ---------- grelha ---------- */
 let renderQueued = false;
 function scheduleRender() {
   if (renderQueued) return;
@@ -708,214 +664,211 @@ function scheduleRender() {
 }
 
 function render() {
-  if (state.view === "game") renderGame();
+  const all = groups();
+  $("cntAll").textContent = all.length;
+  $("cntChanged").textContent = all.filter((g) => g.changed).length || "";
+  $("cntConflict").textContent = all.reduce((a, g) => a + g.conflicts, 0) || "";
+  $("cntVita").textContent = all.filter((g) => g.vitaOnly).length || "";
+  $("libTitle").textContent = { all: t("all_games"), changed: t("filter_changed"), conflict: t("filter_conflicts"), vita: t("vita_only") }[state.filter];
+  $("count").textContent = `${all.length} · ${tn("n_saves", state.games.size)}`;
+  renderInspector(all);
+  if (state.view !== "library") return;
+
   const grid = $("grid");
   grid.replaceChildren();
-  const all = groups();
   const q = state.query.toLowerCase();
-  let shown = 0, conflicts = 0;
-
+  let shown = 0;
   for (const g of all) {
-    conflicts += g.conflicts;
     if (state.filter === "changed" && !g.changed) continue;
     if (state.filter === "conflict" && !g.conflicts) continue;
+    if (state.filter === "vita" && !g.vitaOnly) continue;
     const hay = [g.title, g.code, ...g.saves.flatMap((s) => [s.id, s.subtitle, s.detail])].join(" ").toLowerCase();
     if (q && !hay.includes(q)) continue;
     shown++;
-    grid.append(card(g));
+    grid.append(tile(g));
   }
-
-  $("count").textContent = `${all.length} · ${tn("n_saves", state.games.size)}`;
-  $("conflictN").textContent = conflicts ? conflicts : "";
   if (!shown) {
     const e = el("div", "empty");
-    e.style.gridColumn = "1 / -1";
     e.append(el("b", null, t(all.length ? "empty_filter_title" : "empty_none_title")),
              el("span", null, t(all.length ? "empty_filter_text" : "empty_none_text")));
     grid.append(e);
   }
 }
 
-function card(g) {
-  const c = el("article", "game");
-  if (g.allExcluded) c.style.opacity = ".55";
+function tile(g) {
+  const c = el("button", "tile" + (g.allExcluded ? " excluded" : ""));
+  c.setAttribute("role", "option");
+  c.setAttribute("aria-selected", g.code === state.selected);
   const art = artFor(g.code, g.icon);
-  if (g.status) art.append(el("div", `badge ${g.status}`,
-    g.status === "conflict" && g.conflicts > 1 ? tn("n_conflicts", g.conflicts) : statusText(g.status)));
-  if (g.saves.length > 1) art.append(el("div", "count-pill", tn("n_saves", g.saves.length)));
-  if (g.vitaOnly) { art.append(el("div", "where", t("vita_only"))); c.classList.add("vita-only"); }
-  c.append(art);
-
-  const meta = el("div", "meta");
-  meta.append(el("div", "t", g.title));
-  const s = g.saves.length === 1 ? (g.saves[0].subtitle || g.saves[0].detail.split("\n")[0])
-                                 : g.saves.map((x) => x.subtitle || x.id).join(" · ");
-  meta.append(el("div", "s", s || ""));
-  const row = el("div", "row");
-  row.append(el("code", null, g.code), el("span", null, fmtDate(g.modified)));
-  meta.append(row);
-  c.append(meta);
-  c.onclick = () => openGame(g.code);
+  if (g.saves.length > 1) art.append(el("span", "badge-n", g.saves.length));
+  if (g.vitaOnly) art.append(el("span", "where", t("vita_only")));
+  c.append(art, el("div", "t-title", g.title));
+  const sub = el("div", "t-sub");
+  if (g.status) {
+    sub.className = `t-sub s-${g.status}`;
+    sub.innerHTML = ICON[g.status] || "";
+    sub.append(el("span", null, g.status === "conflict" && g.conflicts > 1 ? tn("n_conflicts", g.conflicts) : statusText(g.status)));
+  } else {
+    sub.append(el("span", null, g.saves.length === 1 ? (g.saves[0].subtitle || g.saves[0].detail.split("\n")[0])
+                                                     : g.saves.map((x) => x.subtitle || x.id).join(" · ")));
+  }
+  c.append(sub);
+  c.onclick = () => selectGame(g.code);
   return c;
 }
 
-/* ---------- página de um jogo ---------- */
-function openGame(code) {
-  showView("game");
-  state.openGame = code;
-  $("gameScroll").scrollTop = 0;
-  renderGame(true);
+/* ---------- inspetor ---------- */
+function selectGame(code) {
+  state.selected = code;
+  $("inspector").classList.add("open");
+  render();
   loadDetails();
 }
-
-function closeGame() { showView("library"); render(); }
+function closeInspector() { $("inspector").classList.remove("open"); }
 
 async function loadDetails(force = false) {
-  const g = groups().find((x) => x.code === state.openGame);
+  const g = groups().find((x) => x.code === state.selected);
   if (!g) return;
   const want = g.saves.map((s) => s.id).filter((id) => force || !(id in state.details));
   if (!want.length) return;
   Object.assign(state.details, await api().get_save_details(want));
-  if (state.openGame === g.code) renderGame();
+  if (state.selected === g.code) renderInspector();
 }
 
-function renderGame(animate = false) {
-  const g = groups().find((x) => x.code === state.openGame);
-  if (!g) { closeGame(); return; }
-
-  const pic = g.saves.map((s) => state.details[s.id]?.pic).find(Boolean);
-  if (pic) { $("heroBg").style.background = ""; $("heroBg").style.backgroundImage = `url(${pic})`; }
-  else {
-    const h = hue(g.code);
-    $("heroBg").style.background = `radial-gradient(600px 300px at 20% 0%, hsl(${h} 70% 30%), transparent), var(--surface)`;
+function renderInspector(all = groups()) {
+  const ins = $("inspector");
+  const g = state.selected && all.find((x) => x.code === state.selected);
+  if (!g) {
+    ins.replaceChildren();
+    const e = el("div", "ins-empty"); e.innerHTML = ICON.pick; e.append(el("span", null, t("pick_game")));
+    ins.append(e);
+    return;
   }
-  $("heroIcon").replaceChildren(...(g.icon ? [img(g.icon)] : []));
-  $("heroCode").textContent = g.code;
-  $("heroTitle").textContent = g.title;
-
+  const keepScroll = ins.scrollTop;
+  ins.replaceChildren();
+  const top = el("div", "ins-top");
+  const close = el("button", "tb-btn ins-close"); close.innerHTML = ICON.close; close.setAttribute("aria-label", t("close")); close.onclick = closeInspector;
+  const pic = g.saves.map((s) => state.details[s.id]?.pic).find(Boolean);
+  top.append(close, img(pic || g.icon, "ins-art"), el("h2", null, g.title));
   const sizes = g.saves.map((s) => state.details[s.id]?.size).filter((x) => x != null);
-  const onPc = g.saves.filter((s) => s.where === "pc").length;
-  const stats = [
-    [tn("n_saves", g.saves.length), ""],
-    [sizes.length ? fmtSize(sizes.reduce((a, b) => a + b, 0)) : "…", t("on_pc")],
-    [fmtDate(g.modified), t("last_change")],
-  ];
-  if (onPc < g.saves.length) stats.push([String(g.saves.length - onPc), t("vita_only_lower")]);
-  $("heroStats").replaceChildren(...stats.map(([b, txt]) => { const s = el("span"); s.append(el("b", null, b), txt ? " " + txt : ""); return s; }));
+  const meta = el("div", "ins-meta");
+  meta.append(el("code", null, g.code), el("span", null, tn("n_saves", g.saves.length)));
+  if (sizes.length) meta.append(el("span", null, `${fmtSize(sizes.reduce((a, b) => a + b, 0))} ${t("on_pc")}`));
+  if (g.modified) meta.append(el("span", null, `${t("last_change")} ${fmtDate(g.modified)}`));
+  top.append(meta);
+  ins.append(top, el("div", "ins-sec", t("saves_section")));
+  const list = el("div", "saves");
+  for (const s of g.saves) list.append(saveRow(s));
+  ins.append(list);
 
-  $("saves").replaceChildren(...g.saves.map((s, i) => saveRow(s, animate ? i : -1)));
-  $("btnSyncGame").disabled = state.busy || g.allExcluded;
+  const act = el("div", "ins-actions");
+  const onPc = g.saves.find((s) => s.where === "pc");
+  if (onPc) {
+    const op = el("button", "btn"); op.innerHTML = ICON.folder; op.append(t("open_folder"));
+    op.onclick = () => api().open_save_folder(onPc.id);
+    act.append(op);
+  }
+  const sg = el("button", "btn", t("sync_game")); sg.id = "btnSyncGame";
+  sg.disabled = state.busy || g.allExcluded;
+  sg.onclick = () => preview(state.mode, g.saves.map((s) => s.id));
+  act.append(sg);
+  ins.append(act);
+  ins.scrollTop = keepScroll;
 }
 
-function saveRow(s, i) {
+function saveRow(s) {
   const r = state.results.get(s.id);
   const d = state.details[s.id];
   const excluded = state.excluded.has(s.id);
   const row = el("article", "save" + (excluded ? " excluded" : ""));
-  if (i < 0) row.style.animation = "none"; else row.style.animationDelay = `${i * 40}ms`;
+  row.append(img(s.icon, "thumb"));
 
-  const thumb = el("div", "thumb");
-  if (s.icon) thumb.append(img(s.icon));
-  row.append(thumb);
-
-  const info = el("div", "info");
-  info.append(el("div", "name", s.subtitle || s.id));
-  if (s.detail) info.append(el("div", "detail", s.detail));
-  const sub = el("div", "sub");
-  sub.append(el("code", null, s.id));
-  sub.append(el("span", null, s.where === "vita" ? t("vita_only") : t("on_pc_date", { date: fmtDate(s.modified) })));
-  if (d?.size != null) sub.append(el("span", null, `${fmtSize(d.size)} · ${tn("n_files", d.files.length)}`));
-  info.append(sub);
+  const info = el("div");
+  info.append(el("b", null, s.subtitle || s.id));
+  if (s.detail) info.append(el("div", "det", s.detail));
+  const status = r?.status || (excluded ? "excluded" : null);
+  if (status) info.append(iconText(status, statusText(status)));
+  const ml = el("div", "meta-line");
+  ml.append(el("code", null, s.id), el("span", null, s.where === "vita" ? t("vita_only") : t("on_pc_date", { date: fmtDate(s.modified) })));
+  if (d?.size != null) ml.append(el("span", null, `${fmtSize(d.size)} · ${tn("n_files", d.files.length)}`));
+  info.append(ml);
+  if (r?.status === "error" && r.detail) info.append(el("div", "det s-error", r.detail));
   row.append(info);
 
-  const side = el("div", "side-col");
-  const status = r?.status || (excluded ? "excluded" : null);
-  if (status) side.append(el("div", `badge ${status}`, statusText(status)));
-  const tg = el("label", "toggle");
-  const cb = Object.assign(el("input"), { type: "checkbox", checked: !excluded });
-  cb.onchange = async () => {
-    state.excluded = new Set(await api().set_excluded(s.id, !cb.checked));
-    render();
-  };
-  tg.append(cb, t("sync"));
-  side.append(tg);
-  if (s.where === "pc") {
-    const b = el("button", "ghost");
-    b.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
-    b.append(t("open_folder"));
-    b.onclick = () => api().open_save_folder(s.id);
-    side.append(b);
-  }
-  row.append(side);
+  const wrap = el("div", "switch-wrap");
+  const sw = el("button", "switch");
+  sw.setAttribute("role", "switch"); sw.setAttribute("aria-checked", !excluded); sw.setAttribute("aria-label", t("include_in_sync"));
+  sw.onclick = async () => { state.excluded = new Set(await api().set_excluded(s.id, !excluded)); render(); };
+  wrap.append(sw);
+  row.append(wrap);
 
   if (r?.status === "conflict") {
-    const box = el("div", "resolve");
-    box.append(el("p", null, t("conflict_text")));
-    const bv = el("button"); bv.append(t("keep_vita"), el("small", null, fmtDate(r.vita_date)));
-    const bp = el("button"); bp.append(t("keep_pc"), el("small", null, fmtDate(r.pc_date)));
-    bv.onclick = () => startSync("vita_to_pc", [s.id]);
-    bp.onclick = () => startSync("pc_to_vita", [s.id]);
-    bv.disabled = bp.disabled = state.busy;
-    box.append(bv, bp);
+    const box = el("div", "conflict");
+    const p = el("p"); p.innerHTML = ICON.conflict; p.append(el("span", null, t("conflict_text")));
+    const seg = el("div", "segmented"); seg.setAttribute("role", "group");
+    for (const [label, sub, mode] of [[t("keep_vita"), fmtDate(r.vita_date), "vita_to_pc"], [t("keep_pc"), fmtDate(r.pc_date), "pc_to_vita"]]) {
+      const b = el("button"); b.append(label, el("small", null, sub)); b.disabled = state.busy;
+      b.onclick = () => startSync(mode, [s.id]);
+      seg.append(b);
+    }
+    const later = el("button"); later.setAttribute("aria-pressed", "true"); later.append(t("skip"), el("small", null, t("skip_sub")));
+    seg.append(later);
+    box.append(p, seg);
     row.append(box);
-  } else if (r?.status === "error") {
-    info.append(el("div", "sub", r.detail));
   }
 
-  const extras = el("div", "extras");
-  if (d?.files?.length) {
-    const det = el("details");
-    det.append(el("summary", null, t("files_title", { n: d.files.length })));
-    const files = el("div", "files");
-    for (const f of d.files) { const x = el("div"); x.append(el("span", null, f.name), el("span", null, fmtSize(f.size))); files.append(x); }
-    det.append(files);
-    extras.append(det);
-  }
   if (d) {
+    const extras = el("div", "extras");
+    if (d.files?.length) {
+      const det = el("details");
+      det.append(el("summary", null, t("files_title", { n: d.files.length })));
+      const files = el("div", "mini files");
+      for (const f of d.files) { const x = el("div"); x.append(el("span", null, f.name), el("span", null, fmtSize(f.size))); files.append(x); }
+      det.append(files); extras.append(det);
+    }
     const hist = el("details");
     hist.append(el("summary", null, t("history_title", { n: d.history.length })));
-    const h = el("div", "hist");
+    const h = el("div", "mini");
     if (!d.history.length) h.append(el("div", null, t("no_history")));
     for (const e of d.history) {
       const x = el("div");
-      x.append(el("span", null, fmtDate(e.t)),
-               el("span", null, t("act_" + e.action) + (e.files ? ` (${tn("n_files", e.files)})` : "")));
+      x.append(el("span", null, fmtDate(e.t)), el("span", "grow", t("act_" + e.action) + (e.files ? ` (${tn("n_files", e.files)})` : "")));
       h.append(x);
     }
-    hist.append(h);
-    extras.append(hist);
-
+    hist.append(h); extras.append(hist);
     const bk = el("details");
     bk.append(el("summary", null, t("backups_title", { n: d.backups.length })));
-    const b = el("div", "bks");
+    const b = el("div", "mini");
     if (!d.backups.length) b.append(el("div", null, t("no_backups_save")));
     for (const e of d.backups) {
       const x = el("div");
-      const btn = el("button", "btn", t("restore"));
-      btn.disabled = state.busy;
+      const btn = el("button", "btn small", t("restore")); btn.disabled = state.busy;
       btn.onclick = () => askRestore(e.session, e.side, s.id, e.time);
-      x.append(el("span", null, fmtDate(e.time)), el("span", null, `${t("side_" + e.side)} · ${fmtSize(e.size)}`), btn);
+      x.append(el("span", null, fmtDate(e.time)), el("span", "grow", `${t("side_" + e.side)} · ${fmtSize(e.size)}`), btn);
       b.append(x);
     }
-    bk.append(b);
-    extras.append(bk);
+    bk.append(b); extras.append(bk);
+    row.append(extras);
   }
-  if (extras.children.length) row.append(extras);
   return row;
 }
 
 function setGames(list) { state.games = new Map(list.map((g) => [g.id, g])); }
 
-/* ---------- confirmação genérica ---------- */
+/* ---------- folhas ---------- */
+function openSheet(id) { $(id).classList.add("show"); setTimeout(() => $(id).querySelector(".sheet-actions .primary")?.focus(), 60); }
+function closeSheet(id) { $(id).classList.remove("show"); }
+const sheetOpen = (id) => $(id).classList.contains("show");
+
 let confirmCb = null;
 function ask(title, text, yes, cb) {
   $("cfTitle").textContent = title;
   $("cfText").textContent = text;
   $("cfYes").textContent = yes;
   confirmCb = cb;
-  $("confirm").classList.add("show");
+  openSheet("confirm");
 }
-const closeConfirm = () => { $("confirm").classList.remove("show"); confirmCb = null; };
+const closeConfirm = () => { closeSheet("confirm"); confirmCb = null; };
 $("cfNo").onclick = closeConfirm;
 $("cfYes").onclick = () => { const cb = confirmCb; closeConfirm(); cb && cb(); };
 
@@ -930,16 +883,16 @@ function askRestore(session, side, saveId, time) {
         setGames(res.games);
         state.details = {};
         toast(t("restored"));
-        if (state.view === "game") loadDetails(true);
+        loadDetails(true);
         if (state.view === "backups") openBackups();
         render();
       });
 }
 
 async function openBackups() {
-  showView("backups");
   const { sessions, keep } = await api().list_backups();
   const total = sessions.reduce((a, s) => a + s.size, 0);
+  $("cntBackups").textContent = sessions.length || "";
   $("backupsCount").textContent = `${sessions.length} · ${fmtSize(total)}`;
   $("backupsNote").textContent = keep ? t("backups_note_keep", { n: keep }) : t("backups_note_all");
   const box = $("sessions");
@@ -953,15 +906,13 @@ async function openBackups() {
     const head = el("div", "session-head");
     head.append(el("b", null, fmtDateLong(s.time)));
     if (s.legacy) head.append(el("span", "tag", t("legacy_tag")));
-    head.append(el("div", "grow"), el("span", "sz", `${tn("n_saves", s.entries.length)} · ${fmtSize(s.size)}`));
+    head.append(el("span", "grow"), el("span", "sz", `${tn("n_saves", s.entries.length)} · ${fmtSize(s.size)}`));
     const del = el("button", "btn small danger", t("delete"));
-    del.style.flex = "none";
     del.onclick = () => ask(t("delete_q"),
       t("delete_text", { date: fmtDateLong(s.time), saves: tn("n_saves", s.entries.length), size: fmtSize(s.size) }), t("delete"),
       async () => { const r = await api().delete_backup(s.id); r.ok ? openBackups() : toast(errText(r)); });
     head.append(del);
     card.append(head);
-    const rows = el("div", "bk-rows");
     for (const e of s.entries) {
       const r = el("div", "bk-row");
       const who = el("div", "who"); who.append(saveName(e.save), el("code", null, e.save));
@@ -969,17 +920,30 @@ async function openBackups() {
       btn.disabled = state.busy;
       btn.onclick = () => askRestore(s.id, e.side, e.save, s.time);
       r.append(who, el("span", "side", `${t("side_" + e.side)} · ${fmtSize(e.size)}`), btn);
-      rows.append(r);
+      card.append(r);
     }
-    card.append(rows);
     box.append(card);
   }
 }
 
-/* ---------- sincronização ---------- */
-function setMode(m) {
-  state.mode = m;
-  document.querySelectorAll(".mode").forEach((b) => b.classList.toggle("on", b.dataset.mode === m));
+/* ---------- estado na cápsula ---------- */
+// A cápsula mostra a ligação em repouso e o estado/progresso durante uma operação.
+function setStatus(key, args = {}, cls = "") {
+  statusMsg = { key, args, cls };
+  const cap = $("capText");
+  cap.replaceChildren();
+  const text = key ? t(key, args) : args.text;
+  if (key === "ready") {
+    cap.append(el("span", null, state.conn === "ok" ? t("cap_connected") : "PS Vita"),
+               el("span", "sec", ` · ${$("ip").value.trim() || t("cap_no_ip")} · ${fmtLastSync()}`));
+  } else {
+    cap.append(el("span", null, text));
+    if (state.busy && state.speedText) cap.append(el("span", "sec", " · " + state.speedText));
+  }
+  const capsule = $("capsule");
+  capsule.classList.toggle("err", cls === "err");
+  capsule.classList.toggle("ok", cls !== "err" && state.conn === "ok");
+  capsule.title = cap.textContent;
 }
 
 function setBusy(b, labelKey = "syncing") {
@@ -987,22 +951,16 @@ function setBusy(b, labelKey = "syncing") {
   $("syncBtn").disabled = b;
   $("syncBtn").classList.toggle("spin", b);
   $("syncLabel").textContent = b ? t(labelKey) : t("sync");
-  $("connDot").className = "dot" + (b ? " busy" : "");
-  document.querySelectorAll(".resolve button, .mode, #ip, #port, #btnSyncGame, #btnTest, #btnFind, .bks button, .bk-row button")
+  $("capsule").classList.toggle("busy", b);
+  $("connDot").className = "dot" + (b ? " busy" : state.conn === "ok" ? " ok" : state.conn === "err" ? " err" : "");
+  document.querySelectorAll(".segmented button, #modeSelect, #ip, #port, #btnSyncGame, #btnTest, #btnFind, .mini .btn, .bk-row .btn")
     .forEach((e) => (e.disabled = b));
-  if (!b) $("speed").textContent = "";
-}
-
-// status guarda chave + parâmetros (ou um texto já pronto em args.text) para poder ser retraduzido
-function setStatus(key, args = {}, cls = "") {
-  statusMsg = { key, args, cls };
-  $("status").textContent = key ? t(key, args) : args.text;
-  $("status").className = "status " + cls;
+  if (!b) { state.speedText = ""; $("fill").style.width = "0"; }
 }
 
 function conn() {
   const ip = $("ip").value.trim(), port = $("port").value.trim() || "1337";
-  if (!ip) { setStatus("need_ip", {}, "err"); $("ip").focus(); return null; }
+  if (!ip) { setStatus("need_ip", {}, "err"); toggleConnPop(true); return null; }
   return { ip, port };
 }
 
@@ -1013,7 +971,6 @@ async function preview(mode, only = null) {
   if (config.confirm === "direct") return startSync(mode, only, 0, {}, true);
   const c = conn(); if (!c) return;
   setBusy(true, "analyzing");
-  $("bar").style.width = "0";
   const ok = await api().start_sync(c.ip, c.port, mode, only, true, 0, {}, true);
   if (!ok) setBusy(false);
 }
@@ -1026,7 +983,6 @@ async function startSync(mode, only = null, expected = 0, overrides = {}, rememb
   else state.results.clear();
   render();
   setBusy(true);
-  $("bar").style.width = "0";
   const ok = await api().start_sync(c.ip, c.port, mode, only, false, expected, overrides, remember);
   if (!ok) setBusy(false);
 }
@@ -1039,15 +995,14 @@ function showPreview(s) {
   const items = Object.entries(s.games)
     .filter(([, r]) => ["plan_down", "plan_up", "conflict"].includes(r.status))
     .map(([id, r]) => ({ id, ...r }));
-  // os conflitos ficam também visíveis na grelha, para os poderes resolver depois
   for (const it of items) if (it.status === "conflict") state.results.set(it.id, it);
   render();
-
   if (!items.length) {
-    setStatus("nothing_to_copy", {}, "ok");
+    setStatus("nothing_to_copy");
     toast(t("all_synced"));
     return;
   }
+  setStatus("ready");
   const startChecked = config.confirm !== "unchecked";
   pv = {
     mode: s.mode, items, excluded: s.excluded,
@@ -1055,7 +1010,7 @@ function showPreview(s) {
     choice: Object.fromEntries(items.filter((i) => i.status === "conflict").map((i) => [i.id, "skip"])),
   };
   renderPreview();
-  $("preview").classList.add("show");
+  openSheet("preview");
 }
 
 function pvSelected() {
@@ -1081,7 +1036,6 @@ function updatePvFooter() {
   $("pvCount").textContent = ids.length ? t("pv_count", { n: ids.length, total: pv.items.length, size: fmtSize(bytes) }) : t("pv_nothing");
   $("pvGo").disabled = !ids.length;
   $("pvGo").textContent = ids.length ? tn("copy_n", ids.length) : t("copy");
-  // estado das caixas de cada jogo (marcada / meio / vazia)
   document.querySelectorAll("#pvList .pv-game").forEach((head) => {
     const ids = JSON.parse(head.dataset.ids);
     const on = ids.filter((id) => pv.sel.has(id)).length;
@@ -1105,7 +1059,6 @@ function renderPreview() {
 
   const list = $("pvList");
   list.replaceChildren();
-  // agrupar por jogo, pela mesma ordem da biblioteca
   const byGame = new Map();
   for (const it of pv.items) {
     const code = state.games.get(it.id)?.game || gameCode(it.id);
@@ -1115,13 +1068,11 @@ function renderPreview() {
   const all = groups();
   const order = all.map((g) => g.code);
   const codes = [...byGame.keys()].sort((a, b) => order.indexOf(a) - order.indexOf(b));
-
   for (const code of codes) {
     const its = byGame.get(code);
     const g = all.find((x) => x.code === code);
     const selectable = its.filter((i) => i.status !== "conflict").map((i) => i.id);
     const block = el("div", "pv-block");
-
     const head = el("label", "pv-game");
     head.dataset.ids = JSON.stringify(selectable);
     if (selectable.length) {
@@ -1134,61 +1085,52 @@ function renderPreview() {
     ht.append(el("b", null, g?.title || code), el("span", null, tn("n_saves", its.length)));
     head.append(ht);
     block.append(head);
-
     for (const it of its) {
       const s = state.games.get(it.id);
       const row = el(it.status === "conflict" ? "div" : "label", "pv-save");
-      if (it.status === "conflict") {
-        row.append(el("span", "cb-space"));
-      } else {
+      if (it.status === "conflict") row.append(el("span", "cb-space"));
+      else {
         const cb = Object.assign(el("input"), { type: "checkbox", checked: pv.sel.has(it.id) });
         cb.onchange = () => { cb.checked ? pv.sel.add(it.id) : pv.sel.delete(it.id); updatePvFooter(); };
         row.append(cb);
       }
-      const [cls, arrow] = { plan_down: ["down", "↓"], plan_up: ["up", "↑"], conflict: ["conflict", "!"] }[it.status];
-      row.append(el("div", `dir ${cls}`, arrow));
+      const dir = el("span", "dir" + (it.status === "conflict" ? " is-conflict" : ""));
+      dir.innerHTML = ICON[it.status];
+      row.append(dir);
       const tx = el("div", "pv-text");
       tx.append(el("b", null, s?.subtitle || it.id));
-      if (it.status === "conflict") {
-        tx.append(el("span", null, t("pv_changed_both")));
-      } else {
-        tx.append(el("span", null, (it.status === "plan_down" ? "Vita → PC · " : "PC → Vita · ") + it.files.map((f) => f.name).join(", ")));
-      }
+      tx.append(el("span", null, it.status === "conflict" ? t("pv_changed_both")
+        : (it.status === "plan_down" ? "Vita → PC · " : "PC → Vita · ") + it.files.map((f) => f.name).join(", ")));
       row.append(tx);
       if (it.status === "conflict") {
-        const seg = el("div", "seg");
+        const seg = el("div", "segmented");
         for (const [val, label, sub] of [["vita", "Vita", fmtDate(it.vita_date)], ["pc", "PC", fmtDate(it.pc_date)], ["skip", t("skip"), t("skip_sub")]]) {
-          const b = el("button", pv.choice[it.id] === val ? "on" : "");
+          const b = el("button"); b.setAttribute("aria-pressed", pv.choice[it.id] === val);
           b.append(label, el("small", null, sub));
           b.onclick = () => { pv.choice[it.id] = val; renderPreview(); };
           seg.append(b);
         }
         row.append(seg);
-      } else {
-        row.append(el("div", "sz", fmtSize(it.files.reduce((a, f) => a + f.size, 0))));
-      }
+      } else row.append(el("span", "sz", fmtSize(it.files.reduce((a, f) => a + f.size, 0))));
       block.append(row);
     }
     list.append(block);
   }
   updatePvFooter();
 }
-
 $("pvAll").onclick = () => { pv.items.forEach((i) => i.status !== "conflict" && pv.sel.add(i.id)); renderPreview(); };
 $("pvNone").onclick = () => { pv.sel.clear(); renderPreview(); };
-
-const closePreview = () => $("preview").classList.remove("show");
-$("pvCancel").onclick = () => { closePreview(); pv = null; setStatus("cancelled"); };
+$("pvCancel").onclick = () => { closeSheet("preview"); pv = null; setStatus("cancelled"); };
 $("pvGo").onclick = () => {
   const { ids, overrides, bytes } = pvSelected();
   if (!ids.length) return;
-  closePreview();
+  closeSheet("preview");
   const mode = pv.mode;
   pv = null;
   startSync(mode, ids, bytes, overrides, false);
 };
 
-/* ---------- registo e avisos ---------- */
+/* ---------- atividade e avisos ---------- */
 function logText(ev) {
   const args = { ...ev.args };
   if (ev.key === "log_connecting") {
@@ -1197,16 +1139,13 @@ function logText(ev) {
   }
   return t(ev.key, args);
 }
-
 function addLog(text, level = "info", time = "") {
+  $("logEmpty")?.remove();
   const d = el("div", level);
   if (time) d.append(el("time", null, time));
   d.append(text);
   $("logBody").append(d);
-  $("logBody").scrollTop = $("logBody").scrollHeight;
-  $("logLast").textContent = "— " + text;
 }
-
 let toastT;
 function toast(text) {
   const tt = $("toast"); tt.textContent = text; tt.classList.add("show");
@@ -1218,14 +1157,15 @@ window.onSyncEvent = (ev) => {
   switch (ev.type) {
     case "status":
       setStatus(ev.key, ev.args);
-      $("bar").style.width = Math.round(ev.progress * 100) + "%";
+      $("fill").style.width = Math.round(ev.progress * 100) + "%";
       break;
     case "transfer": {
       const parts = [`${fmtSize(ev.speed)}/s`];
       if (ev.expected) parts.push(t("speed_of", { done: fmtSize(Math.min(ev.bytes, ev.expected)), total: fmtSize(ev.expected) }));
       else parts.push(t("speed_transferred", { n: fmtSize(ev.bytes) }));
       if (ev.eta != null) parts.push(t("speed_left", { eta: fmtEta(ev.eta) }));
-      $("speed").textContent = parts.join(" · ");
+      state.speedText = parts.join(" · ");
+      setStatus(statusMsg.key, statusMsg.args, statusMsg.cls);
       break;
     }
     case "log":
@@ -1233,58 +1173,59 @@ window.onSyncEvent = (ev) => {
       break;
     case "game":
       state.results.set(ev.id, ev);
-      scheduleRender();   // vários saves seguidos -> um só redesenho por frame
+      scheduleRender();
       break;
     case "done": {
       const s = ev.summary;
       setGames(s.all_games);
+      state.conn = "ok";
       setBusy(false);
-      $("connDot").className = "dot ok";
       if (s.dry_run) { showPreview(s); break; }
-      state.details = {};          // ficheiros, histórico e backups podem ter mudado
+      state.details = {};
       render();
-      if (state.view === "game") loadDetails();
+      loadDetails();
       if (state.view === "backups") openBackups();
       state.lastSync = s.last_sync;
-      $("lastSync").textContent = fmtLastSync();
       const parts = [];
       if (s.downloaded) parts.push(tn("done_down", s.downloaded));
       if (s.uploaded) parts.push(tn("done_up", s.uploaded));
       if (s.conflicts.length) parts.push(tn("n_conflicts", s.conflicts.length));
       if (s.errors.length) parts.push(tn("done_errors", s.errors.length));
-      if (parts.length) setStatus(null, { text: parts.join(" · ") }, s.conflicts.length || s.errors.length ? "" : "ok");
-      else setStatus("all_synced", {}, "ok");
-      toast($("status").textContent);
-      if (s.conflicts.length && state.view === "library") setFilter("conflict");
+      if (parts.length) setStatus(null, { text: parts.join(" · ") }, s.errors.length ? "err" : "");
+      else setStatus("all_synced");
+      toast($("capText").textContent);
+      if (s.conflicts.length && state.view === "library") showView("library", "conflict");
       break;
     }
-    case "error": {
+    case "error":
+      state.conn = "err";
       setBusy(false);
-      $("connDot").className = "dot err";
-      $("bar").style.width = "0";
       state.results.forEach((r, id) => r.status === "busy" && state.results.delete(id));
       render();
       setStatus(ev.key, ev.args, "err");
       addLog(t(ev.key, ev.args), "error");
       break;
-    }
   }
 };
 
-function setFilter(f) {
-  state.filter = f;
-  document.querySelectorAll(".chip").forEach((c) => c.classList.toggle("on", c.dataset.filter === f));
-  render();
+/* ---------- ligação (popover da cápsula) ---------- */
+function toggleConnPop(force) {
+  const pop = $("connPop");
+  const open = force ?? pop.hidden;
+  pop.hidden = !open;
+  $("capsule").setAttribute("aria-expanded", open);
+  if (open) setTimeout(() => $("ip").focus(), 30);
 }
+$("capsule").onclick = (e) => { e.stopPropagation(); toggleConnPop(); };
+$("connPop").addEventListener("click", (e) => e.stopPropagation());
+document.addEventListener("click", () => { if (!$("connPop").hidden) toggleConnPop(false); });
 
-/* ---------- ligação ---------- */
 function connMsg(key, args = {}, cls = "") {
   connMsgState = { key, args, cls };
   $("connMsg").className = "conn-msg " + cls;
   if (key === "conn_hint") $("connMsg").innerHTML = t(key);   // texto da tradução, com <b>
   else $("connMsg").textContent = t(key, args);
 }
-
 $("btnTest").onclick = async () => {
   const c = conn(); if (!c) return;
   $("btnTest").disabled = true;
@@ -1292,10 +1233,11 @@ $("btnTest").onclick = async () => {
   $("connDot").className = "dot busy";
   const r = await api().test_connection(c.ip, c.port);
   $("btnTest").disabled = state.busy;
-  $("connDot").className = "dot " + (r.ok ? "ok" : "err");
+  state.conn = r.ok ? "ok" : "err";
+  $("connDot").className = "dot " + state.conn;
   connMsg(r.key, r.args, r.ok ? "ok" : "err");
+  if (!state.busy) r.ok ? setStatus("ready") : setStatus(r.key, r.args, "err");
 };
-
 $("btnFind").onclick = async () => {
   const port = $("port").value.trim() || "1337";
   const box = $("vitaFound");
@@ -1309,10 +1251,13 @@ $("btnFind").onclick = async () => {
   for (const f of list) {
     const b = el("button");
     b.append(el("code", null, f.ip), el("span", null, f.vita ? "PS Vita" : (f.banner || "FTP").slice(0, 28)));
-    b.onclick = () => { $("ip").value = f.ip; box.replaceChildren(); connMsg("ip_filled", {}, "ok"); };
+    b.onclick = () => { $("ip").value = f.ip; box.replaceChildren(); connMsg("ip_filled", {}, "ok"); if (statusMsg.key === "ready") setStatus("ready"); };
     box.append(b);
   }
 };
+$("ip").addEventListener("input", () => { if (statusMsg.key === "ready") setStatus("ready"); });
+for (const id of ["ip", "port"])
+  $(id).addEventListener("keydown", (e) => { if (e.key === "Enter") { toggleConnPop(false); preview(state.mode); } });
 
 /* ---------- definições ---------- */
 function applyInit(init) {
@@ -1322,10 +1267,11 @@ function applyInit(init) {
   state.results.clear();
   state.details = {};
   state.lastSync = init.last_sync;
-  if (state.view !== "library") closeGame();
+  applyAppearance();
   if (init.pc_dir_ok) setStatus("ready");
   else setStatus("choose_pc_dir", {}, "err");
   setLanguage(config.language);
+  api().list_backups().then((b) => { $("cntBackups").textContent = b.sessions.length || ""; });
 }
 
 function setErr(id, key) {
@@ -1339,19 +1285,22 @@ function openSettings() {
   $("vitaDir").value = config.vita_dir || "/ux0:/pspemu/PSP/SAVEDATA";
   $("keepBackups").value = config.keep_backups ?? 10;
   $("langSelect").value = config.language || "";
-  const cf = document.querySelector(`input[name=confirm][value="${config.confirm || "checked"}"]`);
-  if (cf) cf.checked = true;
+  for (const [name, value] of [["confirm", config.confirm || "checked"], ["appearance", config.appearance || "system"]]) {
+    const r = document.querySelector(`input[name=${name}][value="${value}"]`);
+    if (r) r.checked = true;
+  }
   ["setPc", "setBackup", "setVita", "setKeep"].forEach((id) => setErr(id, null));
   $("found").replaceChildren();
-  $("settings").classList.add("show");
+  openSheet("settings");
 }
-const closeSettings = () => $("settings").classList.remove("show");
+const closeSettings = () => closeSheet("settings");
 
-// O idioma aplica-se logo ao escolher (e fica guardado), sem esperar por "Guardar".
+// Idioma e aparência aplicam-se logo ao escolher (e ficam guardados), sem esperar por "Guardar".
 $("langSelect").onchange = async () => {
   config.language = await api().set_language($("langSelect").value);
   setLanguage(config.language);
 };
+document.querySelectorAll("input[name=appearance]").forEach((r) => (r.onchange = () => setAppearance(r.value)));
 
 async function detect() {
   const box = $("found");
@@ -1385,25 +1334,17 @@ $("btnSettings").onclick = openSettings;
 $("btnCancel").onclick = closeSettings;
 $("btnSave").onclick = saveSettings;
 $("btnDetect").onclick = detect;
-for (const id of ["settings", "preview", "confirm"])
+for (const id of ["settings", "confirm"])
   // (nunca devolver false num onclick: isso cancelaria cliques em caixas e opções lá dentro)
-  $(id).addEventListener("click", (e) => {
-    if (e.target.id !== id || id === "preview") return;
-    if (id === "settings") closeSettings(); else closeConfirm();
-  });
+  $(id).addEventListener("click", (e) => { if (e.target.id === id) (id === "settings" ? closeSettings : closeConfirm)(); });
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
-  if ($("confirm").classList.contains("show")) closeConfirm();
-  else if ($("preview").classList.contains("show")) $("pvCancel").click();
-  else if ($("settings").classList.contains("show")) closeSettings();
-  else if (state.view !== "library") closeGame();
+  if (sheetOpen("confirm")) closeConfirm();
+  else if (sheetOpen("preview")) $("pvCancel").click();
+  else if (sheetOpen("settings")) closeSettings();
+  else if (!$("connPop").hidden) toggleConnPop(false);
+  else closeInspector();
 });
-$("btnBack").onclick = closeGame;
-$("btnBackupsBack").onclick = closeGame;
-$("btnSyncGame").onclick = () => {
-  const g = groups().find((x) => x.code === state.openGame);
-  if (g) preview(state.mode, g.saves.map((s) => s.id));
-};
 document.querySelectorAll("[data-browse]").forEach((b) => (b.onclick = async () => {
   const input = $(b.dataset.browse);
   const path = await api().browse_folder(input.value);
@@ -1414,28 +1355,25 @@ document.querySelectorAll("[data-browse]").forEach((b) => (b.onclick = async () 
 LANG = pickLanguage("");
 applyStaticI18n();
 $("syncLabel").textContent = t("sync");
-setStatus("ready");
+applyAppearance();
 
 window.addEventListener("pywebviewready", async () => {
   const init = await api().get_initial();
   $("ip").value = init.config.ip || "";
   $("port").value = init.config.port || "1337";
-  setMode(init.config.mode || "auto");
+  state.mode = init.config.mode || "auto";
+  $("modeSelect").value = state.mode;
   $("grid").classList.add("intro");
   applyInit(init);
+  showView("library", "all");
   setTimeout(() => $("grid").classList.remove("intro"), 600);
   if (!init.pc_dir_ok) { openSettings(); detect(); }
 });
 
-document.querySelectorAll(".mode").forEach((b) => (b.onclick = () => setMode(b.dataset.mode)));
-document.querySelectorAll(".chip").forEach((c) => (c.onclick = () => setFilter(c.dataset.filter)));
+$("modeSelect").onchange = (e) => { state.mode = e.target.value; };
 $("syncBtn").onclick = () => preview(state.mode);
 $("search").oninput = (e) => { state.query = e.target.value; render(); };
-for (const id of ["ip", "port"])
-  $(id).addEventListener("keydown", (e) => { if (e.key === "Enter") preview(state.mode); });
-$("logToggle").onclick = () => $("log").classList.toggle("open");
 $("openPc").onclick = () => api().open_folder("pc");
-$("openBackup").onclick = openBackups;
 $("openBackupFolder").onclick = () => api().open_folder("backup");
 </script>
 </body>

@@ -4,23 +4,25 @@
 
 Play a PSP game on the Vita, carry on in PPSSPP on your PC, then go back to the Vita. Vita Save Sync copies each save to the side where it's out of date. It connects to the Vita over Wi‑Fi through VitaShell's built-in FTP server, so you don't need a USB cable.
 
-![Game library](docs/screenshots/library.png)
+![Game library with a game open in the inspector](docs/screenshots/library_light.png)
 
 ## Features
 
 - **Automatic mode.** The app works out which side you played on and copies saves in that direction. If a save changed on both sides, it asks you instead of guessing.
-- **Preview before copying.** Before anything is copied, a window lists every save that will be copied and in which direction. You can untick the ones you don't want, and pick Vita, PC or Skip for each conflict.
-- **Game library.** Saves are grouped by game, with the real icon and name read from each save's `PARAM.SFO`. Each game has a page with all its saves and the progress text the game writes (rank, % complete, play time…).
+- **Preview before copying.** Before anything is copied, a sheet lists every save that will be copied and in which direction. You can untick the ones you don't want, and pick Vita, PC or Skip for each conflict.
+- **Game library.** Saves are grouped by game, with the real icon and name read from each save's `PARAM.SFO`. Click a game to open it in the inspector next to the library. The inspector shows all its saves, the progress text the game writes (rank, % complete, play time…), files, history and backups.
+- **The connection capsule.** The pill at the top shows the link to your Vita. During a sync it turns into the progress bar, with the save being copied, speed and time left. Click it to set the IP, *Test connection* or *Find my Vita*, which scans your local network.
 - **Backups.** Every file that gets overwritten is backed up first, and old versions can be restored with one click. Older backups are cleaned up automatically. You choose how many to keep.
-- **Vita connection helpers.** *Test connection* checks the FTP server, and *Find my Vita* scans your local network and fills in the IP.
-- Live transfer speed and time left, plus a sync history for every save.
+- **Light and dark (night mode).** The app follows Windows by default. The moon button switches right away, and Settings has System / Light / Dark.
 - You can exclude individual saves, and saves with subfolders are supported.
 - It auto-detects the PPSSPP `SAVEDATA` folder (installed or portable version).
 - **5 languages:** English, Português, Español, Français and 中文 (Simplified Chinese). The app follows your Windows language by default, and you can change it in Settings.
 
-| Game page | Choose what to copy | Backups |
-|:-:|:-:|:-:|
-| ![Game page](docs/screenshots/game.png) | ![Preview](docs/screenshots/preview.png) | ![Backups](docs/screenshots/backups.png) |
+| Night mode | Choose what to copy |
+|:-:|:-:|
+| ![Night mode](docs/screenshots/library_dark.png) | ![Preview](docs/screenshots/preview.png) |
+| **Sync in progress** | **Backups** |
+| ![Sync progress in the connection capsule](docs/screenshots/syncing.png) | ![Backups](docs/screenshots/backups.png) |
 
 ## Requirements
 
@@ -34,7 +36,7 @@ Play a PSP game on the Vita, carry on in PPSSPP on your PC, then go back to the 
 1. Download `Vita Save Sync.exe` from the [latest release](../../releases/latest) and run it. No installation is needed.
    - The first time, Windows SmartScreen may warn that the app is unknown, because it isn't code-signed. Click *More info → Run anyway*.
 2. On the Vita, open VitaShell and press **SELECT** to start the FTP server.
-3. In the app, click **Find my Vita**, or type the IP that VitaShell shows. Then click **Test connection**.
+3. In the app, click the connection capsule at the top. Then click **Find my Vita**, or type the IP that VitaShell shows, and click **Test connection**.
 4. Pick a mode and click **Sync**. Check the preview, then confirm.
 
 ### The first sync

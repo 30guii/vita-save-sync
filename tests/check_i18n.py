@@ -24,7 +24,7 @@ for m in re.finditer(r"^  (\w\w): \{\n(.*?)^  \},", js, re.S | re.M):
     langs[m.group(1)] = set(re.findall(r'(?:^\s*|, )"?([\w?]+)"?: "', m.group(2), re.M))
 
 used = set()
-used |= set(re.findall(r'data-i18n(?:-html|-ph|-title)?="(\w+)"', html))
+used |= set(re.findall(r'data-i18n(?:-html|-ph|-title|-aria)?="(\w+)"', html))
 used |= set(re.findall(r'\bt\("(\w+)"', html))
 plural = set(re.findall(r'\btn\("(\w+)"', html))
 used |= {"st_" + s for s in ("synced", "downloaded", "uploaded", "conflict", "error", "busy", "excluded",
@@ -34,7 +34,7 @@ used |= {"vn_need_ip", "vn_timeout", "vn_refused", "vn_bad_port", "vn_failed", "
 used |= set(re.findall(r'(?:self\.log|engine\.log|self\.status)\("(\w+)"', py))
 used |= set(re.findall(r'"key":\s*"(\w+)"', py))
 used |= set(re.findall(r'SyncError\("(\w+)"', py))
-used |= {"err_connect", "err_generic", "analyzing", "syncing", "st_syncing"}
+used |= {"err_connect", "err_generic", "analyzing", "syncing", "st_syncing", "conn_hint"}
 used |= set(re.findall(r'connMsg\("(\w+)"', html)) | set(re.findall(r'setStatus\("(\w+)"', html))
 used |= set(re.findall(r'"(found_one|found_many|empty_\w+)"', html))
 used = {k for k in used if not k.endswith("_")}   # prefixos como t("st_" + estado)

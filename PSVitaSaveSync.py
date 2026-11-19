@@ -17,6 +17,9 @@ from sync_engine import (SaveSync, SyncError, SyncState, detect_ppsspp_savedata,
                          save_details, state_scope)
 
 LANGUAGES = ("pt", "en", "es", "fr", "zh")   # "" = idioma do sistema
+APPEARANCES = ("system", "light", "dark")
+# cor da barra de título = cor da barra de ferramentas da interface (ui/index.html: --window)
+TITLE_BAR = {"light": ((0xF2, 0xF2, 0xF4), (0x1D, 0x1D, 0x1F)), "dark": ((0x1C, 0x1C, 0x1E), (0xF5, 0xF5, 0xF7))}
 
 if getattr(sys, "frozen", False):
     # .exe (PyInstaller): a interface vem embutida; os dados ficam ao lado do .exe
@@ -34,7 +37,7 @@ LOG_FILE = os.path.join(DATA_DIR, "app.log")
 VITA_CACHE_DIR = os.path.join(DATA_DIR, "cache", "vita")
 
 DEFAULT_VITA_DIR = "/ux0:/pspemu/PSP/SAVEDATA"
-BG_COLOR = "#070b14"
+BG_COLOR = "#f2f2f4"
 
 # Ao abrir com duplo clique (pythonw) não há consola: os erros ficam em app.log.
 logging.basicConfig(filename=LOG_FILE, level=logging.WARNING,
@@ -54,7 +57,8 @@ def load_config() -> dict:
     cfg = {"ip": "", "port": "1337", "mode": "auto", "pc_dir": "", "backup_dir": "",
            "vita_dir": DEFAULT_VITA_DIR, "excluded": [], "keep_backups": 10,
            "confirm": "checked",   # checked | unchecked | direct (ver a opção "Antes de copiar")
-           "language": ""}         # "" = idioma do sistema
+           "language": "",         # "" = idioma do sistema
+           "appearance": "system"} # system | light | dark (modo noturno)
     try:
         with open(CONFIG_FILE, "r", encoding="utf-8") as f:
             cfg.update(json.load(f))
@@ -142,6 +146,13 @@ class Api:
         cfg["language"] = lang if lang in LANGUAGES else ""
         save_config(cfg)
         return cfg["language"]
+
+    def set_appearance(self, mode):
+        cfg = load_config()
+        cfg["appearance"] = mode if mode in APPEARANCES else "system"
+        save_config(cfg)
+        paint_title_bar(self._window, cfg["appearance"])
+        return cfg["appearance"]
 
     def set_excluded(self, save_id, excluded):
         cfg = load_config()
@@ -250,9 +261,25 @@ class Api:
                 os.startfile(path)
 
 
-def paint_title_bar(window):
-    """Barra de título nativa (para poder redimensionar/encaixar) mas escura, da cor da app."""
+def windows_uses_dark() -> bool:
+    """O Windows está em modo escuro para as apps? (Definições > Personalização > Cores)"""
     try:
+        import winreg
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                             r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize")
+        value, _ = winreg.QueryValueEx(key, "AppsUseLightTheme")
+        winreg.CloseKey(key)
+        return value == 0
+    except OSError:
+        return False
+
+
+def paint_title_bar(window, appearance: str = "system"):
+    """Barra de título nativa (para poder redimensionar/encaixar), pintada com a cor da app
+    no tema claro ou no escuro."""
+    try:
+        dark = appearance == "dark" or (appearance == "system" and windows_uses_dark())
+        (bg, fg) = TITLE_BAR["dark" if dark else "light"]
         hwnd = window.native.Handle.ToInt32()
         dwm = ctypes.windll.dwmapi.DwmSetWindowAttribute
 
@@ -260,10 +287,10 @@ def paint_title_bar(window):
             v = ctypes.c_int(value)
             dwm(hwnd, attr, ctypes.byref(v), ctypes.sizeof(v))
 
-        r, g, b = (int(BG_COLOR[i:i + 2], 16) for i in (1, 3, 5))
-        set_attr(20, 1)                          # modo escuro
-        set_attr(35, (b << 16) | (g << 8) | r)   # cor da barra (Windows 11)
-        set_attr(36, 0x00E8DCD0)                 # cor do texto do título
+        rgb = lambda c: (c[2] << 16) | (c[1] << 8) | c[0]   # COLORREF = 0x00BBGGRR
+        set_attr(20, 1 if dark else 0)   # botões da janela claros/escuros
+        set_attr(35, rgb(bg))            # cor da barra (Windows 11)
+        set_attr(36, rgb(fg))            # cor do texto do título
     except Exception:
         pass  # Windows 10 ignora a cor; não é motivo para falhar
 
@@ -281,7 +308,7 @@ def main():
         background_color=BG_COLOR,
     )
     api._window = window
-    window.events.shown += lambda: paint_title_bar(window)
+    window.events.shown += lambda: paint_title_bar(window, load_config().get("appearance", "system"))
     webview.start()
 
 
